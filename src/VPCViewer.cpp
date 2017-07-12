@@ -15,8 +15,8 @@ void VPCViewer::initVulkan()
 	VK_CHECK_RESULT(initLayersExtensions());
 	VK_CHECK_RESULT(initInstance());
     VK_CHECK_RESULT(initDevice());
-   // VK_CHECK_RESULT(initWindow());
-   // VK_CHECK_RESULT(initSwapchain());
+    VK_CHECK_RESULT(initWindow(500, 500));
+    VK_CHECK_RESULT(initSwapchain());
 }
 
 // Loops through each frame
@@ -34,8 +34,8 @@ void VPCViewer::cleanup()
 }
 
 // Get all layers and extensions in one shot
-	VkResult VPCViewer::initLayersExtensions()
-	{
+VkResult VPCViewer::initLayersExtensions()
+{
 	uint32_t instance_layer_count;
     uint32_t instance_extension_count;
     VkLayerProperties *vk_properties = NULL;
@@ -96,16 +96,15 @@ void VPCViewer::cleanup()
 	    instance_extension_names.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME
 	#endif
 
-	    #if defined( OS_LINUX_XLIB )
-		VK_USE_PLATFORM_XLIB_KHR
-		#define VK_KHR_PLATFORM_SURFACE_EXTENSION_NAME	VK_KHR_XLIB_SURFACE_EXTENSION_NAME
-		#define PFN_vkCreateSurfaceKHR					PFN_vkCreateXlibSurfaceKHR
-		#define vkCreateSurfaceKHR						vkCreateXlibSurfaceKHR
+    #if defined( OS_LINUX_XLIB )
+	#define VK_KHR_PLATFORM_SURFACE_EXTENSION_NAME	VK_KHR_XLIB_SURFACE_EXTENSION_NAME
+	#define PFN_vkCreateSurfaceKHR					PFN_vkCreateXlibSurfaceKHR
+	#define vkCreateSurfaceKHR						vkCreateXlibSurfaceKHR
 	#elif defined( OS_LINUX_XCB )
-		#define VK_USE_PLATFORM_XCB_KHR
-		#define VK_KHR_PLATFORM_SURFACE_EXTENSION_NAME	VK_KHR_XCB_SURFACE_EXTENSION_NAME
-		#define PFN_vkCreateSurfaceKHR					PFN_vkCreateXcbSurfaceKHR
-		#define vkCreateSurfaceKHR						vkCreateXcbSurfaceKHR
+	#define VK_USE_PLATFORM_XCB_KHR
+	#define VK_KHR_PLATFORM_SURFACE_EXTENSION_NAME	VK_KHR_XCB_SURFACE_EXTENSION_NAME
+	#define PFN_vkCreateSurfaceKHR					PFN_vkCreateXcbSurfaceKHR
+	#define vkCreateSurfaceKHR						vkCreateXcbSurfaceKHR
 	#endif
 
     // get Device extensions
@@ -134,7 +133,7 @@ VkResult VPCViewer::initInstance()
     inst_info.enabledExtensionCount = instance_extension_names.size();
     inst_info.ppEnabledExtensionNames = instance_extension_names.data();
 
-    VkResult result = vkCreateInstance(&inst_info, NULL, &mInstance);
+    VkResult result = vkCreateInstance(&inst_info, NULL, &m_instance);
     assert(result == VK_SUCCESS);
 
     return result;
@@ -144,25 +143,28 @@ VkResult VPCViewer::initInstance()
 VkResult VPCViewer::initDevice()
 {
 	uint32_t gpu_count = 0;
+	std::vector<VkPhysicalDevice> gpu_list;
 	VkResult result;
 
 	// Find device information
-    result = vkEnumeratePhysicalDevices(mInstance, &gpu_count, NULL);
+    result = vkEnumeratePhysicalDevices(m_instance, &gpu_count, NULL);
     assert(gpu_count);
     gpu_list.resize(gpu_count);
 
-    result = vkEnumeratePhysicalDevices(mInstance, &gpu_count, gpu_list.data());
+    result = vkEnumeratePhysicalDevices(m_instance, &gpu_count, gpu_list.data());
     assert(!result);
 
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu_list[0], &queue_family_count, NULL);
+    m_physical_device = gpu_list[0];
+
+    vkGetPhysicalDeviceQueueFamilyProperties(m_physical_device, &queue_family_count, NULL);
     assert(queue_family_count >= 1);
 
     queue_properties.resize(queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(gpu_list[0], &queue_family_count, queue_properties.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(m_physical_device, &queue_family_count, queue_properties.data());
     assert(queue_family_count >= 1);
 
-    vkGetPhysicalDeviceMemoryProperties(gpu_list[0], &memory_properties);
-    vkGetPhysicalDeviceProperties(gpu_list[0], &gpu_properties);
+    vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memory_properties);
+    vkGetPhysicalDeviceProperties(m_physical_device, &gpu_properties);
 
     // Create Device now
     VkDeviceQueueCreateInfo queue_info = {};
@@ -183,19 +185,254 @@ VkResult VPCViewer::initDevice()
     device_info.ppEnabledExtensionNames = device_info.enabledExtensionCount ? device_extension_names.data() : NULL;
     device_info.pEnabledFeatures = NULL;
 
-    result = vkCreateDevice(gpu_list[0], &device_info, NULL, &mDevice);
+    result = vkCreateDevice(m_physical_device, &device_info, NULL, &m_device);
     assert(result == VK_SUCCESS);
 
     return result;
 }
 
-VkResult VPCViewer::initWindow()
+VkResult VPCViewer::initWindow(uint32_t width, uint32_t height)
 {
+	// Get window Size first
+	#if defined(__ANDROID__)
+		//AndroidGetWindowSize(&window_width, &window_height);
+	#else
+    window_width  = width;
+    window_height = height;
+	#endif
+
+    assert(window_width > 0);
+    assert(window_height > 0);
+
+    // Get Window connection for Linux
+	#if defined(__LINUX__)
+	// Do nothing on Android or Windows
+    const xcb_setup_t *setup;
+    xcb_screen_iterator_t it;
+    int scr;
+
+    connection = xcb_connect(NULL, &scr);
+    if (connection == NULL || xcb_connection_has_error(connection)) {
+        std::cout << "Unable to make an XCB connection\n";
+        exit(-1);
+    }
+
+    setup = xcb_get_setup(connection);
+    it = xcb_setup_roots_iterator(setup);
+    while (scr-- > 0) xcb_screen_next(&it);
+
+    screen = it.data;
+
+    // initialize the window finally    
+    uint32_t value_mask;
+    uint32_t value_list[32];
+    
+    window = xcb_generate_id(connection);
+
+    value_mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
+    value_list[0] = screen->black_pixel;
+    value_list[1] = XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_EXPOSURE;
+
+    xcb_create_window(connection, XCB_COPY_FROM_PARENT, window, screen->root, 0, 0, window_width, window_height, 0,
+                      XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, value_mask, value_list);
+
+    // Magic code that will send notification when window is destroyed
+    xcb_intern_atom_cookie_t cookie = xcb_intern_atom(connection, 1, 12, "WM_PROTOCOLS");
+    xcb_intern_atom_reply_t *reply = xcb_intern_atom_reply(connection, cookie, 0);
+
+    xcb_intern_atom_cookie_t cookie2 = xcb_intern_atom(connection, 0, 16, "WM_DELETE_WINDOW");
+    atom_wm_delete_window = xcb_intern_atom_reply(connection, cookie2, 0);
+
+    xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, (*reply).atom, 4, 32, 1,
+                        &(*atom_wm_delete_window).atom);
+    free(reply);
+
+    xcb_map_window(connection, window);
+
+    // Force the x/y coordinates to 100,100 results are identical in consecutive
+    // runs
+    const uint32_t coords[] = {100, 100};
+    xcb_configure_window(connection, window, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, coords);
+    xcb_flush(connection);
+
+    xcb_generic_event_t *e;
+    while ((e = xcb_wait_for_event(connection))) {
+        if ((e->response_type & ~0x80) == XCB_EXPOSE) break;
+    }
+	#endif
+
 	return VK_SUCCESS;
 }
 
 VkResult VPCViewer::initSwapchain()
 {
+	VkResult result;
+
+	// Construct the surface description
+	#if defined(__ANDROID__)
+    GET_INSTANCE_PROC_ADDR(m_instance, CreateAndroidSurfaceKHR);
+
+    VkAndroidSurfaceCreateInfoKHR createInfo;
+    createInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+    createInfo.pNext = nullptr;
+    createInfo.flags = 0;
+    createInfo.window = AndroidGetApplicationWindow();
+    result = info.fpCreateAndroidSurfaceKHR(m_instance, &createInfo, nullptr, &m_surface);
+	#elif defined(__LINUX__)
+    VkXcbSurfaceCreateInfoKHR createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
+    createInfo.pNext = NULL;
+    createInfo.connection = connection;
+    createInfo.window = window;
+    result = vkCreateXcbSurfaceKHR(m_instance, &createInfo, NULL, &m_surface);
+	#endif 
+    std::cout << "TE1ST 115" << std::endl;
+
+    assert(result == VK_SUCCESS);
+
+    // Find the best options for swapchain
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    std::vector<VkSurfaceFormatKHR> surface_formats_list;
+    std::vector<VkPresentModeKHR> present_modes_list;
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &surface_capabilities);
+
+    uint32_t formatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(m_physical_device, m_surface, &formatCount, nullptr);
+
+    if (formatCount != 0) {
+        surface_formats_list.resize(formatCount);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(m_physical_device, m_surface, &formatCount, surface_formats_list.data());
+    }
+
+    // uint32_t presentModeCount;
+    // vkGetPhysicalDeviceSurfacePresentModesKHR(m_physical_device, m_surface, &presentModeCount, nullptr);
+    //     std::cout << "TEST 114" << std::endl;
+
+    // if (presentModeCount != 0) {
+    //     present_modes_list.resize(presentModeCount);
+    //     vkGetPhysicalDeviceSurfacePresentModesKHR(m_physical_device, m_surface, &presentModeCount, present_modes_list.data());
+    // }
+    std::cout << "TEST 115" << std::endl;
+
+    // Find a valid Surface Format
+    if (surface_formats_list.size() == 1 && surface_formats_list[0].format == VK_FORMAT_UNDEFINED) {
+        surface_format = {VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+    }
+
+    std::cout << "TEST 21" << std::endl;
+
+    for (const auto& temp_surface_format : surface_formats_list) {
+        if (temp_surface_format.format == VK_FORMAT_B8G8R8A8_UNORM &&
+            temp_surface_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            surface_format = temp_surface_format;
+        }
+    }
+    std::cout << "TEST 2" << std::endl;
+
+    // Find a valid Present Mode
+    present_mode = VK_PRESENT_MODE_FIFO_KHR;
+
+    // for (const auto& temp_present_mode : present_modes_list) {
+    //     if (temp_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+    //         bestMode = temp_present_mode;
+    //         break; // we want Mailbox if possible
+    //     } else if (temp_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+    //         bestMode = temp_present_mode;
+    //     }
+    // }
+        std::cout << "TEST 22" << std::endl;
+
+    // present_mode = bestMode;
+
+    // Find a valid VkExtent2D capability
+    if (surface_capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+        extent = surface_capabilities.currentExtent;
+    } else {
+        VkExtent2D actualExtent = {window_width, window_height};
+
+        actualExtent.width = std::max(surface_capabilities.minImageExtent.width, std::min(surface_capabilities.maxImageExtent.width, actualExtent.width));
+        actualExtent.height = std::max(surface_capabilities.minImageExtent.height, std::min(surface_capabilities.maxImageExtent.height, actualExtent.height));
+
+        extent = actualExtent;
+    }
+
+    std::cout << "TEST 3" << std::endl;
+
+    uint32_t imageCount = surface_capabilities.minImageCount + 1;
+    if (surface_capabilities.maxImageCount > 0 && imageCount > surface_capabilities.maxImageCount) {
+        imageCount = surface_capabilities.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    createInfo.surface = m_surface;
+
+    createInfo.minImageCount = imageCount;
+    createInfo.imageFormat = surface_format.format;
+    createInfo.imageColorSpace = surface_format.colorSpace;
+    createInfo.imageExtent = extent;
+    createInfo.imageArrayLayers = 1;
+    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    std::cout << "TEST 4" << std::endl;
+
+    // Find device queues
+	graphics_queue_family_index = UINT32_MAX;
+    present_queue_family_index = UINT32_MAX;
+    int i = 0;
+    for (const auto& queue_family : queue_properties) {
+        if (queue_family.queueCount > 0 && queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            graphics_queue_family_index = i;
+        }
+
+        VkBool32 present_support = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(m_physical_device, i, m_surface, &present_support);
+
+        if (queue_family.queueCount > 0 && present_support) {
+			present_queue_family_index = i;
+	    }
+
+        if (graphics_queue_family_index != UINT32_MAX && present_queue_family_index != UINT32_MAX) {
+            break;
+        }
+        i++;
+    }
+
+    std::cout << "graphics: " << graphics_queue_family_index << "\nPresent: " << present_queue_family_index << std::endl;
+    if (graphics_queue_family_index == UINT32_MAX || present_queue_family_index == UINT32_MAX) {
+        std::cout << "Could not find a queues for both graphics and present" << std::endl;
+        exit(-1);
+    }
+
+   	uint32_t queue_family_indices[] = {(uint32_t) graphics_queue_family_index, (uint32_t) present_queue_family_index};
+    if (graphics_queue_family_index != present_queue_family_index) {
+        createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        createInfo.queueFamilyIndexCount = 2;
+        createInfo.pQueueFamilyIndices = queue_family_indices;
+    } else {
+        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    createInfo.preTransform = surface_capabilities.currentTransform;
+    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    createInfo.presentMode = present_mode;
+    createInfo.clipped = VK_TRUE;
+
+    createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+    if (vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swap_chain) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create swap chain!");
+    }
+
+
+    // vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+    // swapChainImages.resize(imageCount);
+    // vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+
+    // swapChainImageFormat = surfaceFormat.format;
+    // swapChainExtent = extent;
+
+  
 	return VK_SUCCESS;
 }
 

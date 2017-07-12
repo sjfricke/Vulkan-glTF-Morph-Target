@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <assert.h>
 #include <fstream>
 #include <vector>
@@ -33,11 +34,11 @@
 
 #define VK_CHECK_RESULT(f)																\
 {																						\
-	VkResult res = (f);																	\
-	if (res != VK_SUCCESS)																\
+	VkResult result = (f);																	\
+	if (result != VK_SUCCESS)																\
 	{																					\
 		std::cout << "Fatal in " << __FILE__ << " at line " << __LINE__ << std::endl;   \
-		assert(res == VK_SUCCESS);														\
+		assert(result == VK_SUCCESS);														\
 	}																					\
 }
 
@@ -51,7 +52,6 @@ typedef struct {
     VkLayerProperties properties;
     std::vector<VkExtensionProperties> extensions;
 } layer_properties;
-
 
 class VPCViewer {
 public:
@@ -67,7 +67,7 @@ private:
     void mainLoop();
     void cleanup();
 
-    VkSurfaceKHR surface;
+    VkSurfaceKHR m_surface;
     bool prepared;
     bool use_staging_buffer;
     bool save_images;
@@ -76,12 +76,17 @@ private:
     std::vector<const char *> instance_extension_names;
     std::vector<layer_properties> instance_layer_properties;
     std::vector<VkExtensionProperties> instance_extension_properties;
-    VkInstance mInstance;
+    VkInstance m_instance;
 
     std::vector<const char *> device_extension_names;
     std::vector<VkExtensionProperties> device_extension_properties;
-    std::vector<VkPhysicalDevice> gpu_list;
-    VkDevice mDevice;
+    VkPhysicalDevice m_physical_device;
+    VkDevice m_device;
+    
+	VkSurfaceFormatKHR surface_format;
+	VkPresentModeKHR present_mode;
+	VkExtent2D extent;
+
     VkQueue graphics_queue;
     VkQueue present_queue;
     uint32_t graphics_queue_family_index;
@@ -91,13 +96,13 @@ private:
     VkPhysicalDeviceMemoryProperties memory_properties;
 
     VkFramebuffer *framebuffers;
-    int width, height;
+    uint32_t window_width;
+    uint32_t window_height;
     VkFormat format;
 
-    uint32_t swapchainImageCount;
-    VkSwapchainKHR swap_chain;
+    VkSwapchainKHR m_swap_chain;
     std::vector<swap_chain_buffer> buffers;
-    VkSemaphore imageAcquiredSemaphore;
+    VkSemaphore image_acquired_semaphore;
 
     VkCommandPool cmd_pool;
 
@@ -118,8 +123,8 @@ private:
     struct {
         VkDescriptorImageInfo image_info;
     } texture_data;
-    VkDeviceMemory stagingMemory;
-    VkImage stagingImage;
+    VkDeviceMemory staging_memory;
+    VkImage staging_image;
 
     struct {
         VkBuffer buf;
@@ -138,7 +143,7 @@ private:
     VkCommandBuffer cmd; // Buffer for initialization commands
     VkPipelineLayout pipeline_layout;
     std::vector<VkDescriptorSetLayout> desc_layout;
-    VkPipelineCache pipelineCache;
+    VkPipelineCache pipeline_cache;
     VkRenderPass render_pass;
     VkPipeline pipeline;
 
@@ -158,9 +163,16 @@ private:
     VkViewport viewport;
     VkRect2D scissor;
 
+    #if defined(__LINUX__)
+	    xcb_connection_t *connection;
+	    xcb_screen_t *screen;
+	    xcb_window_t window;
+	    xcb_intern_atom_reply_t *atom_wm_delete_window;
+	#endif
+
     VkResult initLayersExtensions();
     VkResult initInstance();
     VkResult initDevice();
-    VkResult initWindow();
+    VkResult initWindow(uint32_t width, uint32_t height);
     VkResult initSwapchain();
 };
