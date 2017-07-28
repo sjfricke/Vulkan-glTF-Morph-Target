@@ -10,25 +10,21 @@
 #include <stdexcept>
 #include <functional>
 
+#include "debug.h"
+#include "camera.hpp"
+
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#if defined( OS_LINUX_XLIB )
-	#include <X11/Xlib.h>
-	#include <X11/Xatom.h>
-	#include <X11/extensions/xf86vmode.h>	// for fullscreen video mode
-	#include <X11/extensions/Xrandr.h>		// for resolution changes
-	#define VK_USE_PLATFORM_XLIB_KHR
-#elif defined( OS_LINUX_XCB )
-	#include <X11/keysym.h>
-	#include <xcb/xcb.h>
-	#include <xcb/xcb_keysyms.h>
-	#include <xcb/xcb_icccm.h>
-	#include <xcb/randr.h>
-	#define VK_USE_PLATFORM_XCB_KHR
-#endif
+    #include <xcb/xcb.h>
+    #define VK_KHR_XCB_SURFACE_EXTENSION_NAME "VK_KHR_xcb_surface"
+
+    // #define VK_USE_PLATFORM_XCB_KHR
+    // #define VK_KHR_PLATFORM_SURFACE_EXTENSION_NAME  VK_KHR_XCB_SURFACE_EXTENSION_NAME
+    // #define PFN_vkCreateSurfaceKHR                  PFN_vkCreateXcbSurfaceKHR
+    // #define vkCreateSurfaceKHR                      vkCreateXcbSurfaceKHR
 
 #include <vulkan/vulkan.h>
 
@@ -61,11 +57,71 @@ public:
 
     void run();
 
+    #if defined(__linux__)
+        struct {
+            bool left = false;
+            bool right = false;
+            bool middle = false;
+        } mouseButtons;
+        bool quit = false;
+        xcb_connection_t *connection;
+        xcb_screen_t *screen;
+        xcb_window_t window;
+        xcb_intern_atom_reply_t *atom_wm_delete_window;
+
+        xcb_window_t setupWindow();
+        
+        void handleEvent(const xcb_generic_event_t *event);
+    #endif
+
 private:
 
+void initxcbConnection();
     void initVulkan();
     void mainLoop();
     void cleanup();
+
+    uint32_t width = 1280;
+    uint32_t height = 720;
+
+    float zoom = 0;
+
+    // Defines a frame rate independent timer value clamped from -1.0...1.0
+    // For use in animations, rotations, etc.
+    float timer = 0.0f;
+    // Multiplier for speeding up (or slowing down) the global timer
+    float timerSpeed = 0.25f;
+    
+    bool paused = false;
+
+    // Use to adjust mouse rotation speed
+    float rotationSpeed = 1.0f;
+    // Use to adjust mouse zoom speed
+    float zoomSpeed = 1.0f;
+
+    Camera camera;
+
+    glm::vec3 rotation = glm::vec3();
+    glm::vec3 cameraPos = glm::vec3();
+    glm::vec2 mousePos;
+
+    std::string title = "Vulkan Pointcloud Viewer";
+    std::string name = "VulkanPointcloudViewer";
+
+    struct 
+    {
+        VkImage image;
+        VkDeviceMemory mem;
+        VkImageView view;
+    } depthStencil;
+
+    // Gamepad state (only one pad supported)
+    struct
+    {
+        glm::vec2 axisLeft = glm::vec2(0.0f);
+        glm::vec2 axisRight = glm::vec2(0.0f);
+    } gamePadState;
+
 
     VkSurfaceKHR m_surface;
     bool prepared;
@@ -161,16 +217,8 @@ private:
     uint32_t queue_family_count;
 
     VkViewport viewport;
-    VkRect2D scissor;
+    VkRect2D scissor;   
 
-    #if defined(__LINUX__)
-	    xcb_connection_t *connection;
-	    xcb_screen_t *screen;
-	    xcb_window_t window;
-	    xcb_intern_atom_reply_t *atom_wm_delete_window;
-	#endif
-
-    VkResult initLayersExtensions();
     VkResult initInstance();
     VkResult initDevice();
     VkResult initWindow(uint32_t width, uint32_t height);
