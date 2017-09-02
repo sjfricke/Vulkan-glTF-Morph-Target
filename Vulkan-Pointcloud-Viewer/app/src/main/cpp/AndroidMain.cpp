@@ -13,22 +13,25 @@
 // limitations under the License.
 #include <android/log.h>
 #include <android_native_app_glue.h>
-#include "VulkanMain.hpp"
+#include "Util.h"
+//#include "VulkanMain.hpp"
+#include "PointCloud.h"
+
+static PointCloud pointCloud;
 
 // Process the next main command.
 void handle_cmd(android_app* app, int32_t cmd) {
   switch (cmd) {
     case APP_CMD_INIT_WINDOW:
       // The window is being shown, get it ready.
-      InitVulkan(app);
+      pointCloud.InitVulkanPointCloud(app);
       break;
     case APP_CMD_TERM_WINDOW:
       // The window is being hidden or closed, clean it up.
-      DeleteVulkan();
+      pointCloud.DeleteVulkan();
       break;
     default:
-      __android_log_print(ANDROID_LOG_INFO, "Vulkan Tutorials",
-                          "event not handled: %d", cmd);
+      LOGW("event not handled: %d", cmd);
   }
 }
 
@@ -43,14 +46,15 @@ void android_main(struct android_app* app) {
 
   // Main loop
   do {
-    if (ALooper_pollAll(IsVulkanReady() ? 1 : 0, nullptr,
-                        &events, (void**)&source) >= 0) {
-      if (source != NULL) source->process(app, source);
+    if (ALooper_pollAll(pointCloud.IsVulkanReady() ? 1 : 0, nullptr, &events, (void**)&source) >= 0) {
+      if (source != NULL) {
+          source->process(app, source);
+      }
     }
 
     // render if vulkan is ready
-    if (IsVulkanReady()) {
-      VulkanDrawFrame();
+    if (pointCloud.IsVulkanReady()) {
+        pointCloud.VulkanDrawFrame();
     }
   } while (app->destroyRequested == 0);
 }

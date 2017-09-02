@@ -26,7 +26,7 @@ add_library( # Sets the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-             ${SRC_DIR}/VulkanMain.cpp
+             ${SRC_DIR}/PointCloud.cpp
              ${SRC_DIR}/AndroidMain.cpp
              ${WRAPPER_DIR}/vulkan_wrapper.cpp )
 
