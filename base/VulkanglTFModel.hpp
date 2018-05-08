@@ -332,8 +332,8 @@ namespace vkglTF
 
 		struct Vertex {
 			glm::vec3 pos;
-			glm::vec3 normal;
-			glm::vec2 uv;
+			glm::vec3 pos_1;
+			glm::vec3 pos_2;
 		};
 
 		struct Vertices {
@@ -364,6 +364,7 @@ namespace vkglTF
 
 		void loadNode(const tinygltf::Node &node, const glm::mat4 &parentMatrix, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
 		{
+
 			// Generate local node matrix
 			glm::vec3 translation = glm::vec3(0.0f);
 			if (node.translation.size() == 3) {
@@ -397,8 +398,12 @@ namespace vkglTF
 			// Node contains mesh data
 			if (node.mesh > -1) {
 				const tinygltf::Mesh mesh = model.meshes[node.mesh];
+
+                bool isMorphTarget = mesh.weights.empty() ? true : false;
+
 				for (size_t j = 0; j < mesh.primitives.size(); j++) {
 					const tinygltf::Primitive &primitive = mesh.primitives[j];
+
 					if (primitive.indices < 0) {
 						continue;
 					}
@@ -408,6 +413,7 @@ namespace vkglTF
 					// Vertices
 					{
 						const float *bufferPos = nullptr;
+						std::vector<float*> bufferPosWeight(2);
 						const float *bufferNormals = nullptr;
 						const float *bufferTexCoords = nullptr;
 
@@ -430,15 +436,38 @@ namespace vkglTF
 							bufferTexCoords = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
 						}
 
+                        if (isMorphTarget) {
+                          for (size_t t = 0; t < primitive.targets.size(); t++) {
+
+                            if(primitive.targets.at(t).find("POSITION") != primitive.targets.at(t).end()) {
+                              const tinygltf::Accessor &posWeightAccessor = model.accessors[primitive.targets.at(t).find("POSITION")->second];
+                              const tinygltf::BufferView &posWeightView = model.bufferViews[posAccessor.bufferView];
+                              bufferPosWeight[t] = reinterpret_cast<float *>(&(model.buffers[posWeightView.buffer].data[posWeightAccessor.byteOffset + posWeightView.byteOffset]));
+                            }
+
+                            if(primitive.targets.at(t).find("NORMAL") != primitive.targets.at(t).end()) {}
+
+                            if(primitive.targets.at(t).find("TEXCOORD_0") != primitive.targets.at(t).end()) { }
+
+
+                          }
+                        }
+
 						for (size_t v = 0; v < posAccessor.count; v++) {
 							Vertex vert{};
 							vert.pos = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
+							vert.pos_1 = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPosWeight[0][v * 3]), 1.0f);
+							vert.pos_2 = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPosWeight[1][v * 3]), 1.0f);
 							vert.pos *= globalscale;
-							vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
-							vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
+							vert.pos_1 *= globalscale;
+							vert.pos_2 *= globalscale;
+							//vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
+							//vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
 							// Vulkan coordinate system
 							vert.pos.y *= -1.0f;
-							vert.normal.y *= -1.0f;
+							vert.pos_1.y *= -1.0f;
+							vert.pos_2.y *= -1.0f;
+							//vert.normal.y *= -1.0f;
 							vertexBuffer.push_back(vert);
 						}
 					}
