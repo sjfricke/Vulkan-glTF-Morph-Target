@@ -3,4 +3,4 @@
 	url = https://github.com/g-truc/glm.git
 [submodule "external/gli"]
 	path = external/gli
-	url = https://github.com/g-truc/gli
+	url = https://github.com/g-truc/gli.git
