@@ -138,9 +138,9 @@ public:
 		camera.movementSpeed = 2.0f;
 		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
 		camera.rotationSpeed = 0.25f;
-		camera.setRotation({ -12.0f, 152.0f, 0.0f });
-		camera.setPosition({ 1.05f, 0.31f, 1.85f });
-        pushConstWeights = { 0.0f, 0.0f };
+		camera.setRotation({ -12.0f, 170.0f, 0.0f });
+		camera.setPosition({ 1.05f, 0.31f, 4.5f });
+        pushConstWeights = { 0.0f, 1.0f };
 	}
 
 	~VulkanExample()
@@ -213,7 +213,7 @@ public:
 			VkDeviceSize offsets[1] = { 0 };
 
 			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.cube, 0, NULL);
-            vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstWeights), pushConstWeights.data());
+            vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, pushConstWeights.size() * sizeof(float), pushConstWeights.data());
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.cube);
 			models.cube.draw(drawCmdBuffers[i]);
 
@@ -352,6 +352,11 @@ public:
 		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutCI.setLayoutCount = 1;
 		pipelineLayoutCI.pSetLayouts = setLayouts.data();
+        VkPushConstantRange pushConstantRange{};
+        pushConstantRange.size = pushConstWeights.size() * sizeof(float);
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pipelineLayoutCI.pushConstantRangeCount = 1;
+        pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
 
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
 

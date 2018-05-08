@@ -399,7 +399,7 @@ namespace vkglTF
 			if (node.mesh > -1) {
 				const tinygltf::Mesh mesh = model.meshes[node.mesh];
 
-                bool isMorphTarget = mesh.weights.empty() ? true : false;
+                bool isMorphTarget = mesh.weights.empty() ? false : true;
 
 				for (size_t j = 0; j < mesh.primitives.size(); j++) {
 					const tinygltf::Primitive &primitive = mesh.primitives[j];
@@ -413,7 +413,7 @@ namespace vkglTF
 					// Vertices
 					{
 						const float *bufferPos = nullptr;
-						std::vector<float*> bufferPosWeight(2);
+						std::vector<const float*> bufferPosWeight(2);
 						const float *bufferNormals = nullptr;
 						const float *bufferTexCoords = nullptr;
 
@@ -441,8 +441,8 @@ namespace vkglTF
 
                             if(primitive.targets.at(t).find("POSITION") != primitive.targets.at(t).end()) {
                               const tinygltf::Accessor &posWeightAccessor = model.accessors[primitive.targets.at(t).find("POSITION")->second];
-                              const tinygltf::BufferView &posWeightView = model.bufferViews[posAccessor.bufferView];
-                              bufferPosWeight[t] = reinterpret_cast<float *>(&(model.buffers[posWeightView.buffer].data[posWeightAccessor.byteOffset + posWeightView.byteOffset]));
+                              const tinygltf::BufferView &posWeightView = model.bufferViews[posWeightAccessor.bufferView];
+                              bufferPosWeight[t] = reinterpret_cast<const float*>(&(model.buffers[posWeightView.buffer].data[posWeightAccessor.byteOffset + posWeightView.byteOffset]));
                             }
 
                             if(primitive.targets.at(t).find("NORMAL") != primitive.targets.at(t).end()) {}
@@ -456,8 +456,8 @@ namespace vkglTF
 						for (size_t v = 0; v < posAccessor.count; v++) {
 							Vertex vert{};
 							vert.pos = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
-							vert.pos_1 = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPosWeight[0][v * 3]), 1.0f);
-							vert.pos_2 = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPosWeight[1][v * 3]), 1.0f);
+							vert.pos_1 = localNodeMatrix * glm::vec4(glm::make_vec3(&(bufferPosWeight[0])[v * 3]), 1.0f);
+							vert.pos_2 = localNodeMatrix * glm::vec4(glm::make_vec3(&(bufferPosWeight[1])[v * 3]), 1.0f);
 							vert.pos *= globalscale;
 							vert.pos_1 *= globalscale;
 							vert.pos_2 *= globalscale;
@@ -468,6 +468,9 @@ namespace vkglTF
 							vert.pos_1.y *= -1.0f;
 							vert.pos_2.y *= -1.0f;
 							//vert.normal.y *= -1.0f;
+//                            std::cout << vert.pos.x   << ", " << vert.pos.y   << ", "  << vert.pos.z   << " = "
+//                                      << vert.pos_1.x << ", " << vert.pos_1.y << ", "  << vert.pos_1.z << " = "
+//                                      << vert.pos_2.x << ", " << vert.pos_2.y << ", "  << vert.pos_2.z << std::endl;
 							vertexBuffer.push_back(vert);
 						}
 					}
