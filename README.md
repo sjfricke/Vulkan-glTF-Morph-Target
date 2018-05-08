@@ -4,13 +4,13 @@ This was made to be a proof of concepts for people to reference when hacking at 
 
 ## Credit
 
-Most of the template is from [Sascha Willem's Vulkan-glTF-PBR demo](https://github.com/SaschaWillems/Vulkan-glTF-PBR) so hugh shout out to him! I wanted to use morph targets for my own purpose, knew glTF had it in its specification and decided to create a demo since no one else seems to have.
+Most of the template is from [Sascha Willem's Vulkan-glTF-PBR demo](https://github.com/SaschaWillems/Vulkan-glTF-PBR) so huge shout out to him! I wanted to use morph targets for my own purpose, knew [glTF had it in its specification](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#morph-targets) and decided to create a demo since no one else seems to have.
 
 ## glTF 2.0 Model loading
 
-Model loading and rendering is implemented in the [vkglTF::Model](./base/VulkanglTFModel.hpp) class and uses the [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files. It also does texture loading from all files supported by glTF 2.0 (.png, .jpg, etc.) and generates a full mip-chain for every texture loaded. 
+Model loading and rendering is implemented in the [vkglTF::Model](./base/VulkanglTFModel.hpp) class and uses the [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files. 
 
-Note that this is not a full glTF model class implementation and as of now only supports static models, only supports a single material, etc. I plan on adding more stuff to the Vulkan glTF 2.0 loader to make it more general in the future.
+Note that this is not a full glTF model class implementation, this was to show the steps for morph target rendering/parsing.
 
 ## Cloning
 

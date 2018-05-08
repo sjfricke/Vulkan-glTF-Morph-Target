@@ -113,13 +113,6 @@ public:
 		float flipUV = 1.0f;
 	} uboMatrices;
 
-	struct UBOParams {
-		glm::vec4 lightDir = glm::vec4(0.0f, -0.5f, -0.5f, 1.0f);
-		float exposure = 4.5f;
-		float gamma = 2.2f;
-		float prefilteredCubeMipLevels;
-	} uboParams;
-
 	VkPipelineLayout pipelineLayout;
 
 	struct Pipelines {
@@ -136,6 +129,8 @@ public:
 
 	glm::vec3 rotation = glm::vec3(0.0f, 135.0f, 0.0f);
 
+    std::vector<float> pushConstWeights;
+
 	VulkanExample() : VulkanExampleBase()
 	{
 		title = "Vulkan glTf 2.0 Morph Target";
@@ -145,6 +140,7 @@ public:
 		camera.rotationSpeed = 0.25f;
 		camera.setRotation({ -12.0f, 152.0f, 0.0f });
 		camera.setPosition({ 1.05f, 0.31f, 1.85f });
+        pushConstWeights = { 0.0f, 0.0f };
 	}
 
 	~VulkanExample()
@@ -217,6 +213,7 @@ public:
 			VkDeviceSize offsets[1] = { 0 };
 
 			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.cube, 0, NULL);
+            vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushConstWeights), pushConstWeights.data());
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.cube);
 			models.cube.draw(drawCmdBuffers[i]);
 
@@ -363,7 +360,7 @@ public:
 		std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
 			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
 			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 },
-			{ 2, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 6 }
+			{ 2, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 6 }
 		};
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCI{};
 		vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
