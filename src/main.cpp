@@ -129,7 +129,7 @@ public:
 
 	glm::vec3 rotation = glm::vec3(0.0f, 135.0f, 0.0f);
 
-    std::vector<float> pushConstWeights;
+	std::vector<float> pushConstWeights;
 
 	VulkanExample() : VulkanExampleBase()
 	{
@@ -140,7 +140,7 @@ public:
 		camera.rotationSpeed = 0.25f;
 		camera.setRotation({ -12.0f, 170.0f, 0.0f });
 		camera.setPosition({ 1.05f, 0.31f, 4.5f });
-        pushConstWeights = { 0.0f, 0.0f };
+		pushConstWeights = { 0.0f, 0.0f };
 	}
 
 	~VulkanExample()
@@ -213,7 +213,7 @@ public:
 			VkDeviceSize offsets[1] = { 0 };
 
 			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.cube, 0, NULL);
-            vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, pushConstWeights.size() * sizeof(float), pushConstWeights.data());
+			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, pushConstWeights.size() * sizeof(float), pushConstWeights.data());
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.cube);
 			models.cube.draw(drawCmdBuffers[i]);
 
@@ -332,8 +332,8 @@ public:
 		if (settings.multiSampling) {
 			multisampleStateCI.rasterizationSamples = settings.sampleCount;
 		} else {
-            multisampleStateCI.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-        }
+			multisampleStateCI.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		}
 
 		std::vector<VkDynamicState> dynamicStateEnables = {
 			VK_DYNAMIC_STATE_VIEWPORT,

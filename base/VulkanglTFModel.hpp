@@ -411,7 +411,7 @@ namespace vkglTF
 			if (node.mesh > -1) {
 				const tinygltf::Mesh mesh = model.meshes[node.mesh];
 
-                bool isMorphTarget = mesh.weights.empty() ? false : true;
+			bool isMorphTarget = mesh.weights.empty() ? false : true;
 
 				for (size_t j = 0; j < mesh.primitives.size(); j++) {
 					const tinygltf::Primitive &primitive = mesh.primitives[j];
@@ -508,7 +508,7 @@ namespace vkglTF
 								weightsData[i] = weightsData[i];
 							}
 
-                        }
+						}
 
 						for (size_t v = 0; v < posAccessor.count; v++) {
 							Vertex vert{};
