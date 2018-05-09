@@ -334,6 +334,9 @@ namespace vkglTF
 			glm::vec3 pos;
 			glm::vec3 pos_1;
 			glm::vec3 pos_2;
+			glm::vec3 normal;
+			glm::vec3 normal_1;
+			glm::vec3 normal_2;
 		};
 
 		struct Vertices {
@@ -426,6 +429,7 @@ namespace vkglTF
 					{
 						const float *bufferPos = nullptr;
 						std::vector<const float*> bufferPosWeight(2);
+						std::vector<const float*> bufferNormalWeight(2);
 						const float *bufferNormals = nullptr;
 						const float *bufferTexCoords = nullptr;
 
@@ -458,9 +462,13 @@ namespace vkglTF
 									bufferPosWeight[t] = reinterpret_cast<const float*>(&(model.buffers[posWeightView.buffer].data[posWeightAccessor.byteOffset + posWeightView.byteOffset]));
 								}
 
-								if(primitive.targets[t].find("NORMAL") != primitive.targets[t].end()) {}
+								if(primitive.targets[t].find("NORMAL") != primitive.targets[t].end()) {
+									const tinygltf::Accessor &normalWeightAccessor = model.accessors[primitive.targets[t].find("NORMAL")->second];
+									const tinygltf::BufferView &normalWeightView = model.bufferViews[normalWeightAccessor.bufferView];
+									bufferNormalWeight[t] = reinterpret_cast<const float*>(&(model.buffers[normalWeightView.buffer].data[normalWeightAccessor.byteOffset + normalWeightView.byteOffset]));
+								}
 
-								if(primitive.targets[t].find("TEXCOORD_0") != primitive.targets[t].end()) { }
+								if(primitive.targets[t].find("TANGENT") != primitive.targets[t].end()) { }
 							}
 
 							// find sampler to node's mesh
@@ -518,16 +526,20 @@ namespace vkglTF
 							vert.pos *= globalscale;
 							vert.pos_1 *= globalscale;
 							vert.pos_2 *= globalscale;
-							//vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
-							//vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
+							// glm::normalize() causes "nan" TODO figure that out
+							vert.normal = glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f));
+							vert.normal_1 = glm::mat3(localNodeMatrix) * glm::vec3(bufferNormalWeight[0] ? glm::make_vec3(&(bufferNormalWeight[0])[v * 3]) : glm::vec3(0.0f));
+							vert.normal_2 = glm::mat3(localNodeMatrix) * glm::vec3(bufferNormalWeight[1] ? glm::make_vec3(&(bufferNormalWeight[1])[v * 3]) : glm::vec3(0.0f));
+									//vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
 							// Vulkan coordinate system
 							vert.pos.y *= -1.0f;
 							vert.pos_1.y *= -1.0f;
 							vert.pos_2.y *= -1.0f;
-							//vert.normal.y *= -1.0f;
+							vert.normal.y *= -1.0f;
+							vert.normal_1.y *= -1.0f;
+							vert.normal_2.y *= -1.0f;
 							vertexBuffer.push_back(vert);
 						}
-
 
 					}
 					// Indices

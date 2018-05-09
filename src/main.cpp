@@ -107,11 +107,8 @@ public:
 	} uniformBuffers;
 
 	struct UBOMatrices {
-		glm::mat4 projection;
+		glm::mat4 MVP;
 		glm::mat4 model;
-		glm::mat4 view;
-		glm::vec3 camPos;
-		float flipUV = 1.0f;
 	} uboMatrices;
 
 	VkPipelineLayout pipelineLayout;
@@ -313,7 +310,7 @@ public:
 		rasterizationStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 		rasterizationStateCI.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterizationStateCI.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizationStateCI.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		rasterizationStateCI.frontFace = VK_FRONT_FACE_CLOCKWISE;
 		rasterizationStateCI.lineWidth = 1.0f;
 
 		VkPipelineColorBlendAttachmentState blendAttachmentState{};
@@ -377,7 +374,10 @@ public:
 		std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
 			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
 			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 },
-			{ 2, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 6 }
+			{ 2, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 6 },
+			{ 3, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 9 },
+			{ 4, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 12 },
+			{ 5, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 15 },
 		};
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCI{};
 		vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -441,11 +441,10 @@ public:
 	void updateUniformBuffers()
 	{
 		// 3D object
-		uboMatrices.projection = camera.matrices.perspective;
-		uboMatrices.view = camera.matrices.view;
 		uboMatrices.model = glm::mat4(1.0f);
 		uboMatrices.model = glm::rotate(uboMatrices.model, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-		uboMatrices.camPos = camera.position * -1.0f;
+		uboMatrices.MVP = camera.matrices.perspective * camera.matrices.view * uboMatrices.model;
+//		uboMatrices.camPos = camera.position * -1.0f;
 		memcpy(uniformBuffers.cube.mapped, &uboMatrices, sizeof(uboMatrices));
 	}
 
