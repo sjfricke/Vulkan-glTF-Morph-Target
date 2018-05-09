@@ -1,10 +1,16 @@
 # Vulkan Morph Targets (Blend Shapes) using glTF 2.0 models
 
+## WORK IN PROGRESS - DONE VERY SOON
+
 This was made to be a proof of concepts for people to reference when hacking at their own project
 
 ## Credit
 
 Most of the template is from [Sascha Willem's Vulkan-glTF-PBR demo](https://github.com/SaschaWillems/Vulkan-glTF-PBR) so huge shout out to him! I wanted to use morph targets for my own purpose, knew [glTF had it in its specification](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#morph-targets) and decided to create a demo since no one else seems to have.
+
+For info how to read in morph targets from a glTF file check out the great two tutorials from the KhronosGroup/glTF-Tutorials repo
+- [Simple Morph Target](https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_017_SimpleMorphTarget.md)
+- [Morph Targets Example](https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_018_MorphTargets.md)
 
 ## glTF 2.0 Model loading
 

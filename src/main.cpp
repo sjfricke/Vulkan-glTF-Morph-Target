@@ -140,7 +140,7 @@ public:
 		camera.rotationSpeed = 0.25f;
 		camera.setRotation({ -12.0f, 170.0f, 0.0f });
 		camera.setPosition({ 1.05f, 0.31f, 4.5f });
-        pushConstWeights = { 0.0f, 1.0f };
+        pushConstWeights = { 0.0f, 0.0f };
 	}
 
 	~VulkanExample()
@@ -239,7 +239,7 @@ public:
 		}
 #endif
 		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
-	}
+    }
 
 	void setupDescriptors()
 	{
@@ -352,11 +352,11 @@ public:
 		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 		pipelineLayoutCI.setLayoutCount = 1;
 		pipelineLayoutCI.pSetLayouts = setLayouts.data();
-        VkPushConstantRange pushConstantRange{};
-        pushConstantRange.size = pushConstWeights.size() * sizeof(float);
-        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        pipelineLayoutCI.pushConstantRangeCount = 1;
-        pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
+		VkPushConstantRange pushConstantRange{};
+		pushConstantRange.size = pushConstWeights.size() * sizeof(float);
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+		pipelineLayoutCI.pushConstantRangeCount = 1;
+		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
 
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
 

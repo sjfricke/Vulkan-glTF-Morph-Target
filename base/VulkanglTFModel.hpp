@@ -340,16 +340,28 @@ namespace vkglTF
 			VkBuffer buffer;
 			VkDeviceMemory memory;
 		} vertices;
+
 		struct Indices {
-			int count;
+			uint32_t count;
 			VkBuffer buffer;
 			VkDeviceMemory memory;
 		} indices;
+
+		enum MorphInterpolation {LINEAR, STEP, CUBICSPLINE};
+		struct MorphTarget {
+			size_t  sampler;
+			size_t  input;
+			size_t  output;
+			MorphInterpolation interpolation;
+		};
 
 		std::vector<Primitive> primitives;
 
 		std::vector<Texture> textures;
 		std::vector<Material> materials;
+
+		std::vector<float> weightsTime;
+		std::vector<float> weightsData;
 
 		void destroy(VkDevice device)
 		{
@@ -362,7 +374,7 @@ namespace vkglTF
 			}
 		};
 
-		void loadNode(const tinygltf::Node &node, const glm::mat4 &parentMatrix, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
+		void loadNode(const tinygltf::Node &node, size_t nodeIndex, const glm::mat4 &parentMatrix, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
 		{
 
 			// Generate local node matrix
@@ -391,7 +403,7 @@ namespace vkglTF
 			// Parent node with children
 			if (node.children.size() > 0) {
 				for (auto i = 0; i < node.children.size(); i++) {
-					loadNode(model.nodes[node.children[i]], localNodeMatrix, model, indexBuffer, vertexBuffer, globalscale);
+					loadNode(model.nodes[node.children[i]], node.children[i], localNodeMatrix, model, indexBuffer, vertexBuffer, globalscale);
 				}
 			}
 
@@ -436,21 +448,66 @@ namespace vkglTF
 							bufferTexCoords = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
 						}
 
-                        if (isMorphTarget) {
-                          for (size_t t = 0; t < primitive.targets.size(); t++) {
+						if (isMorphTarget) {
+							MorphTarget morphTarget;
+							for (size_t t = 0; t < primitive.targets.size(); t++) {
 
-                            if(primitive.targets.at(t).find("POSITION") != primitive.targets.at(t).end()) {
-                              const tinygltf::Accessor &posWeightAccessor = model.accessors[primitive.targets.at(t).find("POSITION")->second];
-                              const tinygltf::BufferView &posWeightView = model.bufferViews[posWeightAccessor.bufferView];
-                              bufferPosWeight[t] = reinterpret_cast<const float*>(&(model.buffers[posWeightView.buffer].data[posWeightAccessor.byteOffset + posWeightView.byteOffset]));
-                            }
+								if(primitive.targets[t].find("POSITION") != primitive.targets[t].end()) {
+									const tinygltf::Accessor &posWeightAccessor = model.accessors[primitive.targets[t].find("POSITION")->second];
+									const tinygltf::BufferView &posWeightView = model.bufferViews[posWeightAccessor.bufferView];
+									bufferPosWeight[t] = reinterpret_cast<const float*>(&(model.buffers[posWeightView.buffer].data[posWeightAccessor.byteOffset + posWeightView.byteOffset]));
+								}
 
-                            if(primitive.targets.at(t).find("NORMAL") != primitive.targets.at(t).end()) {}
+								if(primitive.targets[t].find("NORMAL") != primitive.targets[t].end()) {}
 
-                            if(primitive.targets.at(t).find("TEXCOORD_0") != primitive.targets.at(t).end()) { }
+								if(primitive.targets[t].find("TEXCOORD_0") != primitive.targets[t].end()) { }
+							}
+
+							// find sampler to node's mesh
+							for (size_t a = 0; a < model.animations.size(); a++) {
+								for (size_t c = 0; c < model.animations[a].channels.size(); c++) {
+									if (model.animations[a].channels[c].target_node == nodeIndex &&
+										model.animations[a].channels[c].target_path == "weights") {
+
+										morphTarget.sampler = model.animations[a].channels[c].sampler;
+										morphTarget.input = model.animations[a].samplers[morphTarget.sampler].input;
+										morphTarget.output = model.animations[a].samplers[morphTarget.sampler].output;
+										if (model.animations[a].samplers[morphTarget.sampler].interpolation == "STEP") {
+											morphTarget.interpolation = STEP;
+										} else if (model.animations[a].samplers[morphTarget.sampler].interpolation == "CUBICSPLINE") {
+											morphTarget.interpolation = CUBICSPLINE;
+										} else { // LINEAR as default incase glTF file is invalid
+											morphTarget.interpolation = LINEAR;
+										}
+
+										a = model.animations.size(); //outer break
+										break;
+									}
+								}
+							}
+
+							// get weight input (times)
+							const tinygltf::Accessor &inputAccessor = model.accessors[morphTarget.input];
+							const tinygltf::BufferView &inputView = model.bufferViews[inputAccessor.bufferView];
+							const float* weightTimeBuffer = reinterpret_cast<const float *>(&(model.buffers[inputView.buffer].data[inputAccessor.byteOffset + inputView.byteOffset]));
+							weightsTime.resize(inputAccessor.count);
 
 
-                          }
+							// We need to copy morph weight data for CPU to calculate during looping
+							for (size_t i = 0; i < weightsTime.size(); i++) {
+								weightsTime[i] = weightTimeBuffer[i];
+							}
+
+							// now the output (weight data)
+							const tinygltf::Accessor &outputAccessor = model.accessors[morphTarget.output];
+							const tinygltf::BufferView &outputView = model.bufferViews[outputAccessor.bufferView];
+							const float* weightDataBuffer = reinterpret_cast<const float *>(&(model.buffers[outputView.buffer].data[outputView.byteOffset + outputView.byteOffset]));
+							weightsData.resize(outputAccessor.count);
+
+							for (size_t i = 0; i < weightsData.size(); i++) {
+								weightsData[i] = weightsData[i];
+							}
+
                         }
 
 						for (size_t v = 0; v < posAccessor.count; v++) {
@@ -464,15 +521,13 @@ namespace vkglTF
 							//vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
 							//vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
 							// Vulkan coordinate system
-							vert.pos.y *= -1.0f;
-							vert.pos_1.y *= -1.0f;
-							vert.pos_2.y *= -1.0f;
+
+
 							//vert.normal.y *= -1.0f;
-//                            std::cout << vert.pos.x   << ", " << vert.pos.y   << ", "  << vert.pos.z   << " = "
-//                                      << vert.pos_1.x << ", " << vert.pos_1.y << ", "  << vert.pos_1.z << " = "
-//                                      << vert.pos_2.x << ", " << vert.pos_2.y << ", "  << vert.pos_2.z << std::endl;
 							vertexBuffer.push_back(vert);
 						}
+
+
 					}
 					// Indices
 					{
@@ -596,7 +651,7 @@ namespace vkglTF
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
 					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
-					loadNode(node, glm::mat4(1.0f), gltfModel, indexBuffer, vertexBuffer, scale);
+					loadNode(node, i,  glm::mat4(1.0f), gltfModel, indexBuffer, vertexBuffer, scale);
 				}
 			}
 			else {
