@@ -90,6 +90,7 @@ VkPipelineShaderStageCreateInfo loadShader(VkDevice device, std::string filename
 class VulkanExample : public VulkanExampleBase
 {
 public:
+	int test = 0;
 	struct Models {
 		vkglTF::Model cube;
 	} models;
@@ -130,6 +131,7 @@ public:
 	glm::vec3 rotation = glm::vec3(0.0f, 135.0f, 0.0f);
 
 	std::vector<float> pushConstWeights;
+	uint32_t currentWeight = 0;
 
 	VulkanExample() : VulkanExampleBase()
 	{
@@ -165,6 +167,16 @@ public:
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 2, descriptorsets.data(), 0, NULL);
 
 		vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+	}
+
+	void reBuildCommandBuffers()
+	{
+		if (!checkCommandBuffers())
+		{
+			destroyCommandBuffers();
+			createCommandBuffers();
+		}
+		buildCommandBuffers();
 	}
 
 	void buildCommandBuffers()
@@ -470,12 +482,17 @@ public:
 		submitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer];
 		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentBuffer]));
 		VulkanExampleBase::submitFrame();
+		VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 		if (!paused) {
-			rotation.y += frameTimer * 0.1f;
-			if (rotation.y > 2.0f * (float)M_PI) {
-				rotation.y -= 2.0f * (float)M_PI;
+			test += 1;
+			if (test % 50 == 0) {
+				for (size_t i = 0; i < 2; i++) {
+					pushConstWeights[i] = models.cube.weightsData[currentWeight * 2 + i];
+				}
+				currentWeight++;
+				if (currentWeight >= 127) { currentWeight = 0; }
+				reBuildCommandBuffers();
 			}
-			updateUniformBuffers();
 		}
 	}
 

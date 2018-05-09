@@ -244,6 +244,7 @@ public:
 
 	void initSwapchain();
 	void setupSwapChain();
+	bool checkCommandBuffers();
 	void createCommandBuffers();
 	void destroyCommandBuffers();
 

@@ -7,7 +7,7 @@ set(EXTERNAL_DIR ../../external)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -DVK_USE_PLATFORM_ANDROID_KHR -DVK_NO_PROTOTYPES")
 
 add_library(
-    native-lib SHARED
+    VglTFMT SHARED
     ${SRC_DIR}/main.cpp
     ${BASE_DIR}/VulkanAndroid.cpp
     ${BASE_DIR}/VulkanExampleBase.cpp
@@ -24,7 +24,7 @@ include_directories(${EXTERNAL_DIR}/gli)
 include_directories(${ANDROID_NDK}/sources/android/native_app_glue)
 
 target_link_libraries(
-    native-lib
+    VglTFMT
     native-app-glue
     android
     log

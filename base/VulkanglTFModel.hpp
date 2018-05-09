@@ -302,7 +302,7 @@ namespace vkglTF
 	/*
 		glTF material class
 	*/
-	struct Material {		
+	struct Material {
 		enum AlphaMode{ ALPHAMODE_OPAQUE, ALPHAMODE_MASK, ALPHAMODE_BLEND };
 		AlphaMode alphaMode = ALPHAMODE_OPAQUE;
 		float alphaCutoff = 1.0f;
@@ -411,7 +411,7 @@ namespace vkglTF
 			if (node.mesh > -1) {
 				const tinygltf::Mesh mesh = model.meshes[node.mesh];
 
-			bool isMorphTarget = mesh.weights.empty() ? false : true;
+				bool isMorphTarget = mesh.weights.empty() ? false : true;
 
 				for (size_t j = 0; j < mesh.primitives.size(); j++) {
 					const tinygltf::Primitive &primitive = mesh.primitives[j];
@@ -492,8 +492,8 @@ namespace vkglTF
 							const float* weightTimeBuffer = reinterpret_cast<const float *>(&(model.buffers[inputView.buffer].data[inputAccessor.byteOffset + inputView.byteOffset]));
 							weightsTime.resize(inputAccessor.count);
 
-
 							// We need to copy morph weight data for CPU to calculate during looping
+							// Also trying to avoid C memcpy for safty and true C++ container use
 							for (size_t i = 0; i < weightsTime.size(); i++) {
 								weightsTime[i] = weightTimeBuffer[i];
 							}
@@ -501,13 +501,13 @@ namespace vkglTF
 							// now the output (weight data)
 							const tinygltf::Accessor &outputAccessor = model.accessors[morphTarget.output];
 							const tinygltf::BufferView &outputView = model.bufferViews[outputAccessor.bufferView];
-							const float* weightDataBuffer = reinterpret_cast<const float *>(&(model.buffers[outputView.buffer].data[outputView.byteOffset + outputView.byteOffset]));
+							const float* weightDataBuffer = reinterpret_cast<const float *>(&(model.buffers[outputView.buffer].data[outputAccessor.byteOffset + outputView.byteOffset]));
 							weightsData.resize(outputAccessor.count);
 
 							for (size_t i = 0; i < weightsData.size(); i++) {
-								weightsData[i] = weightsData[i];
+//								std::cout << i << ": " << weightDataBuffer[i] << std::endl;
+								weightsData[i] = weightDataBuffer[i];
 							}
-
 						}
 
 						for (size_t v = 0; v < posAccessor.count; v++) {
@@ -521,8 +521,9 @@ namespace vkglTF
 							//vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
 							//vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
 							// Vulkan coordinate system
-
-
+							vert.pos.y *= -1.0f;
+							vert.pos_1.y *= -1.0f;
+							vert.pos_2.y *= -1.0f;
 							//vert.normal.y *= -1.0f;
 							vertexBuffer.push_back(vert);
 						}
@@ -596,7 +597,7 @@ namespace vkglTF
 				}
 				if (mat.values.find("metallicFactor") != mat.values.end()) {
 					material.metallicFactor = static_cast<float>(mat.values["metallicFactor"].Factor());
-				}				
+				}
 				if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
 					material.normalTexture = &textures[gltfModel.textures[mat.additionalValues["normalTexture"].TextureIndex()].source];
 				}
