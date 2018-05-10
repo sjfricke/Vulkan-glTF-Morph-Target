@@ -103,6 +103,7 @@ public:
 	};
 
 	struct UniformBuffers {
+		Buffer morphTaret; // SSBO block
 		Buffer cube;
 	} uniformBuffers;
 
@@ -114,15 +115,15 @@ public:
 	VkPipelineLayout pipelineLayout;
 
 	struct Pipelines {
-		VkPipeline cube;
+		VkPipeline loader;
 	} pipelines;
 
 	struct DescriptorSetLayouts {
-		VkDescriptorSetLayout cube;
+		VkDescriptorSetLayout loader;
 	} descriptorSetLayouts;
 
 	struct DescriptorSets {
-		VkDescriptorSet cube;
+		VkDescriptorSet loader;
 	} descriptorSets;
 
 	glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -144,20 +145,22 @@ public:
 
 	~VulkanExample()
 	{
-		vkDestroyPipeline(device, pipelines.cube, nullptr);
+		vkDestroyPipeline(device, pipelines.loader, nullptr);
 
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.cube, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.loader, nullptr);
 
 		models.cube.destroy(device);
 
 		vkDestroyBuffer(device, uniformBuffers.cube.buffer, nullptr);
 		vkFreeMemory(device, uniformBuffers.cube.memory, nullptr);
+		vkDestroyBuffer(device, uniformBuffers.morphTaret.buffer, nullptr);
+		vkFreeMemory(device, uniformBuffers.morphTaret.memory, nullptr);
 	}
 
 	void renderPrimitive(vkglTF::Model &model, vkglTF::Primitive &primitive, VkCommandBuffer commandBuffer) {
 		std::array<VkDescriptorSet, 2> descriptorsets = {
-			descriptorSets.cube,
+			descriptorSets.loader,
 			primitive.material.descriptorSet,
 		};
 
@@ -221,9 +224,9 @@ public:
 
 			VkDeviceSize offsets[1] = { 0 };
 
-			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.cube, 0, NULL);
+			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.loader, 0, NULL);
 			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, pushConstWeights.size() * sizeof(float), pushConstWeights.data());
-			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.cube);
+			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.loader);
 			models.cube.draw(drawCmdBuffers[i]);
 
 			vkCmdEndRenderPass(drawCmdBuffers[i]);
@@ -248,6 +251,9 @@ public:
 		}
 #endif
 		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
+
+		// Need to wait until we get morph target data to build storage buffer for it
+		prepareStorageBuffers();
     }
 
 	void setupDescriptors()
@@ -257,10 +263,11 @@ public:
 		*/
 		std::vector<VkDescriptorPoolSize> poolSizes = {
 			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
+			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 },
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		descriptorPoolCI.poolSizeCount = 1;
+		descriptorPoolCI.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 		descriptorPoolCI.pPoolSizes = poolSizes.data();
 		descriptorPoolCI.maxSets = 1;
 		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool));
@@ -270,30 +277,38 @@ public:
 		*/
 		{
 			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-				{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+				{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT , nullptr },
+				{ 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT , nullptr },
 			};
 
 			VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
 			descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 			descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
 			descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.cube));
+			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.loader));
 
 			VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
 			descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 			descriptorSetAllocInfo.descriptorPool = descriptorPool;
-			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.cube;
+			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.loader;
 			descriptorSetAllocInfo.descriptorSetCount = 1;
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.cube));
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.loader));
 
-			std::array<VkWriteDescriptorSet, 1> writeDescriptorSets{};
+			std::array<VkWriteDescriptorSet, 2> writeDescriptorSets{};
 
 			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			writeDescriptorSets[0].descriptorCount = 1;
-			writeDescriptorSets[0].dstSet = descriptorSets.cube; // TODO: Rename to scene?
+			writeDescriptorSets[0].dstSet = descriptorSets.loader;
 			writeDescriptorSets[0].dstBinding = 0;
 			writeDescriptorSets[0].pBufferInfo = &uniformBuffers.cube.descriptor;
+
+			writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			writeDescriptorSets[1].descriptorCount = 1;
+			writeDescriptorSets[1].dstSet = descriptorSets.loader;
+			writeDescriptorSets[1].dstBinding = 0;
+			writeDescriptorSets[1].pBufferInfo = &uniformBuffers.morphTaret.descriptor;
 
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
 		}
@@ -355,7 +370,7 @@ public:
 		dynamicStateCI.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
 
 		// Pipeline layout
-		std::array<VkDescriptorSetLayout, 1> setLayouts = { descriptorSetLayouts.cube };
+		std::array<VkDescriptorSetLayout, 1> setLayouts = { descriptorSetLayouts.loader };
 
 		VkPipelineLayoutCreateInfo pipelineLayoutCI{};
 		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -372,12 +387,8 @@ public:
 		// Vertex bindings an attributes
 		VkVertexInputBindingDescription vertexInputBinding = { 0, sizeof(vkglTF::Model::Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
 		std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
-			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
-			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 },
-			{ 2, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 6 },
-			{ 3, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 9 },
-			{ 4, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 12 },
-			{ 5, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 15 },
+			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 }, // inPos
+			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 }, // inNormal
 		};
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCI{};
 		vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -428,7 +439,7 @@ public:
 		shaderStages[0].pSpecializationInfo = &specializationInfo;
 
 
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.cube));
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.loader));
 		for (auto shaderStage : shaderStages) {
 			vkDestroyShaderModule(device, shaderStage.module, nullptr);
 		}
@@ -454,6 +465,14 @@ public:
 		VK_CHECK_RESULT(vkMapMemory(device, uniformBuffers.cube.memory, 0, sizeof(uboMatrices), 0, &uniformBuffers.cube.mapped));
 
 		updateUniformBuffers();
+	}
+
+	/*
+		Prepare Storage Buffers used for dynamic amount of buffers in shaders
+	 */
+	void prepareStorageBuffers()
+	{
+		uniformBuffers.morphTaret.descriptor = { uniformBuffers.morphTaret.buffer, 0, VK_WHOLE_SIZE };
 	}
 
 	void updateUniformBuffers()
@@ -504,7 +523,7 @@ public:
 			test += 1;
 			if (test % 50 == 0) {
 				for (size_t i = 0; i < 2; i++) {
-					pushConstWeights[i] = models.cube.weightsData[currentWeight * 2 + i];
+					pushConstWeights[i] = models.cube.meshes[0].weightsData[currentWeight * 2 + i];
 				}
 				currentWeight++;
 				if (currentWeight >= 127) { currentWeight = 0; }

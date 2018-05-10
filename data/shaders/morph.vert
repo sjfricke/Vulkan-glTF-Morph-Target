@@ -4,11 +4,7 @@
 #extension GL_ARB_shading_language_420pack : enable
 
 layout (location = 0) in vec3 inPos;
-layout (location = 1) in vec3 inPos_1;
-layout (location = 2) in vec3 inPos_2;
-layout (location = 3) in vec3 inNormal;
-layout (location = 4) in vec3 inNormal_1;
-layout (location = 5) in vec3 inNormal_2;
+layout (location = 1) in vec3 inNormal;
 
 layout (constant_id = 0) const uint morphOffsets = 0;
 
@@ -18,10 +14,14 @@ layout (binding = 0) uniform UBO
 	mat4 model;
 } ubo;
 
-#define morphCount 2
+layout(binding = 1) buffer MorphTargets {
+   vec3 morphTargets[ ];
+};
+
+#define maxMorphCount 8
 
 layout(push_constant) uniform PushConsts {
-	float morphWeights[morphCount];
+	float morphWeights[maxMorphCount];
 } pushConsts;
 
 layout (location = 0) out vec3 outNormal;
@@ -34,18 +34,10 @@ out gl_PerVertex
 
 void main() 
 {
-    float testX = 0.0;
-    float testY = 0.0;
-    for (uint i = 0; i < (morphOffsets & 0xff); i++) {
-        testX += 1.0;
-    }
-    for (uint i = 0; i < (morphOffsets >> 8); i++) {
-        testY -= 1.0;
-    }
+    vec3 lightPos = vec3(1.0, -1.0, 3.0);
 
-    vec3 lightPos = vec3(testX,testY, 2.0);
-
-    vec3 morphPos = inPos + (inPos_1 * pushConsts.morphWeights[0]) + (inPos_2 * pushConsts.morphWeights[1]);
+//    vec3 morphPos = inPos + (inPos_1 * pushConsts.morphWeights[0]) + (inPos_2 * pushConsts.morphWeights[1]);
+    vec3 morphPos = inPos + (morphTargets[0] * pushConsts.morphWeights[0]) + (morphTargets[1] * pushConsts.morphWeights[1]);
 //    vec3 morphNormal = inNormal + (inNormal_1 * pushConsts.morphWeights[0]) + (inNormal_2 * pushConsts.morphWeights[1]);
     vec3 morphNormal = inNormal;
 

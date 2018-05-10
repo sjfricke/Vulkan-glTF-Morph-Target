@@ -317,16 +317,32 @@ namespace vkglTF
 	};
 
 	/*
-	 	glTF Morph Target class
-	 */
-
-	/*
 		glTF primitive class
 	*/
 	struct Primitive {
 		uint32_t firstIndex;
 		uint32_t indexCount;
 		Material &material;
+
+		std::vector<const float*> morphPos;
+		std::vector<const float*> morphNormal;
+		std::vector<const float*> morphTangent;
+	};
+
+	/*
+		glTF Mesh class
+	*/
+	struct Mesh {
+		enum MorphInterpolation {LINEAR, STEP, CUBICSPLINE};
+		bool isMorphTarget;
+		size_t  sampler;
+		size_t  input;
+		size_t  output;
+		MorphInterpolation interpolation;
+		std::vector<float> weightsInit;
+		std::vector<float> weightsTime;
+		std::vector<float> weightsData;
+		std::vector<Primitive> primitives;
 	};
 
 	/*
@@ -336,11 +352,7 @@ namespace vkglTF
 
 		struct Vertex {
 			glm::vec3 pos;
-			glm::vec3 pos_1;
-			glm::vec3 pos_2;
 			glm::vec3 normal;
-			glm::vec3 normal_1;
-			glm::vec3 normal_2;
 		};
 
 		struct Vertices {
@@ -354,21 +366,9 @@ namespace vkglTF
 			VkDeviceMemory memory;
 		} indices;
 
-		enum MorphInterpolation {LINEAR, STEP, CUBICSPLINE};
-		struct MorphTarget {
-			size_t  sampler;
-			size_t  input;
-			size_t  output;
-			MorphInterpolation interpolation;
-		};
-
-		std::vector<Primitive> primitives;
-
+		std::vector<Mesh> meshes;
 		std::vector<Texture> textures;
 		std::vector<Material> materials;
-
-		std::vector<float> weightsTime;
-		std::vector<float> weightsData;
 
 		void destroy(VkDevice device)
 		{
@@ -408,183 +408,192 @@ namespace vkglTF
 			localNodeMatrix = parentMatrix * localNodeMatrix;
 
 			// Parent node with children
+			// TODO support children testing
 			if (node.children.size() > 0) {
 				for (auto i = 0; i < node.children.size(); i++) {
 					loadNode(model.nodes[node.children[i]], node.children[i], localNodeMatrix, model, indexBuffer, vertexBuffer, globalscale);
 				}
 			}
 
+			if (node.mesh < 0) {
+				return; // non mesh node
+			}
+
 			// Node contains mesh data
-			if (node.mesh > -1) {
-				const tinygltf::Mesh mesh = model.meshes[node.mesh];
+			const tinygltf::Mesh mesh = model.meshes[node.mesh];
+			meshes.push_back(Mesh{});
+			Mesh &pMesh = meshes.back();
 
-				bool isMorphTarget = mesh.weights.empty() ? false : true;
+			pMesh.isMorphTarget = mesh.weights.empty() ? false : true;
 
-				for (size_t j = 0; j < mesh.primitives.size(); j++) {
-					const tinygltf::Primitive &primitive = mesh.primitives[j];
+			if (pMesh.isMorphTarget) {
+				// find sampler to node's mesh
+				for (size_t a = 0; a < model.animations.size(); a++) {
+					for (size_t c = 0; c < model.animations[a].channels.size(); c++) {
+						if (model.animations[a].channels[c].target_node == nodeIndex &&
+							model.animations[a].channels[c].target_path == "weights") {
 
-					if (primitive.indices < 0) {
-						continue;
-					}
-					uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
-					uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
-					uint32_t indexCount = 0;
-					// Vertices
-					{
-						const float *bufferPos = nullptr;
-						std::vector<const float*> bufferPosWeight(2);
-						std::vector<const float*> bufferNormalWeight(2);
-						const float *bufferNormals = nullptr;
-						const float *bufferTexCoords = nullptr;
-
-						// Position attribute is required
-						assert(primitive.attributes.find("POSITION") != primitive.attributes.end());
-
-						const tinygltf::Accessor &posAccessor = model.accessors[primitive.attributes.find("POSITION")->second];
-						const tinygltf::BufferView &posView = model.bufferViews[posAccessor.bufferView];
-						bufferPos = reinterpret_cast<const float *>(&(model.buffers[posView.buffer].data[posAccessor.byteOffset + posView.byteOffset]));
-
-						if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
-							const tinygltf::Accessor &normAccessor = model.accessors[primitive.attributes.find("NORMAL")->second];
-							const tinygltf::BufferView &normView = model.bufferViews[normAccessor.bufferView];
-							bufferNormals = reinterpret_cast<const float *>(&(model.buffers[normView.buffer].data[normAccessor.byteOffset + normView.byteOffset]));
-						}
-
-						if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
-							const tinygltf::Accessor &uvAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
-							const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
-							bufferTexCoords = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
-						}
-
-						if (isMorphTarget) {
-							MorphTarget morphTarget;
-							for (size_t t = 0; t < primitive.targets.size(); t++) {
-
-								if(primitive.targets[t].find("POSITION") != primitive.targets[t].end()) {
-									const tinygltf::Accessor &posWeightAccessor = model.accessors[primitive.targets[t].find("POSITION")->second];
-									const tinygltf::BufferView &posWeightView = model.bufferViews[posWeightAccessor.bufferView];
-									bufferPosWeight[t] = reinterpret_cast<const float*>(&(model.buffers[posWeightView.buffer].data[posWeightAccessor.byteOffset + posWeightView.byteOffset]));
-								}
-
-								if(primitive.targets[t].find("NORMAL") != primitive.targets[t].end()) {
-									const tinygltf::Accessor &normalWeightAccessor = model.accessors[primitive.targets[t].find("NORMAL")->second];
-									const tinygltf::BufferView &normalWeightView = model.bufferViews[normalWeightAccessor.bufferView];
-									bufferNormalWeight[t] = reinterpret_cast<const float*>(&(model.buffers[normalWeightView.buffer].data[normalWeightAccessor.byteOffset + normalWeightView.byteOffset]));
-								}
-
-								if(primitive.targets[t].find("TANGENT") != primitive.targets[t].end()) { }
+							pMesh.sampler = model.animations[a].channels[c].sampler;
+							pMesh.input = model.animations[a].samplers[pMesh.sampler].input;
+							pMesh.output = model.animations[a].samplers[pMesh.sampler].output;
+							if (model.animations[a].samplers[pMesh.sampler].interpolation == "STEP") {
+								pMesh.interpolation = Mesh::STEP;
+							} else if (model.animations[a].samplers[pMesh.sampler].interpolation == "CUBICSPLINE") {
+								pMesh.interpolation = Mesh::CUBICSPLINE;
+							} else { // LINEAR as default incase glTF file is invalid
+								pMesh.interpolation = Mesh::LINEAR;
 							}
 
-							// find sampler to node's mesh
-							for (size_t a = 0; a < model.animations.size(); a++) {
-								for (size_t c = 0; c < model.animations[a].channels.size(); c++) {
-									if (model.animations[a].channels[c].target_node == nodeIndex &&
-										model.animations[a].channels[c].target_path == "weights") {
-
-										morphTarget.sampler = model.animations[a].channels[c].sampler;
-										morphTarget.input = model.animations[a].samplers[morphTarget.sampler].input;
-										morphTarget.output = model.animations[a].samplers[morphTarget.sampler].output;
-										if (model.animations[a].samplers[morphTarget.sampler].interpolation == "STEP") {
-											morphTarget.interpolation = STEP;
-										} else if (model.animations[a].samplers[morphTarget.sampler].interpolation == "CUBICSPLINE") {
-											morphTarget.interpolation = CUBICSPLINE;
-										} else { // LINEAR as default incase glTF file is invalid
-											morphTarget.interpolation = LINEAR;
-										}
-
-										a = model.animations.size(); //outer break
-										break;
-									}
-								}
-							}
-
-							// get weight input (times)
-							const tinygltf::Accessor &inputAccessor = model.accessors[morphTarget.input];
-							const tinygltf::BufferView &inputView = model.bufferViews[inputAccessor.bufferView];
-							const float* weightTimeBuffer = reinterpret_cast<const float *>(&(model.buffers[inputView.buffer].data[inputAccessor.byteOffset + inputView.byteOffset]));
-							weightsTime.resize(inputAccessor.count);
-
-							// We need to copy morph weight data for CPU to calculate during looping
-							// Also trying to avoid C memcpy for safty and true C++ container use
-							for (size_t i = 0; i < weightsTime.size(); i++) {
-								weightsTime[i] = weightTimeBuffer[i];
-							}
-
-							// now the output (weight data)
-							const tinygltf::Accessor &outputAccessor = model.accessors[morphTarget.output];
-							const tinygltf::BufferView &outputView = model.bufferViews[outputAccessor.bufferView];
-							const float* weightDataBuffer = reinterpret_cast<const float *>(&(model.buffers[outputView.buffer].data[outputAccessor.byteOffset + outputView.byteOffset]));
-							weightsData.resize(outputAccessor.count);
-
-							for (size_t i = 0; i < weightsData.size(); i++) {
-//								std::cout << i << ": " << weightDataBuffer[i] << std::endl;
-								weightsData[i] = weightDataBuffer[i];
-							}
-						}
-
-						for (size_t v = 0; v < posAccessor.count; v++) {
-							Vertex vert{};
-							vert.pos = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
-							vert.pos_1 = localNodeMatrix * glm::vec4(glm::make_vec3(&(bufferPosWeight[0])[v * 3]), 1.0f);
-							vert.pos_2 = localNodeMatrix * glm::vec4(glm::make_vec3(&(bufferPosWeight[1])[v * 3]), 1.0f);
-							vert.pos *= globalscale;
-							vert.pos_1 *= globalscale;
-							vert.pos_2 *= globalscale;
-							// glm::normalize() causes "nan" TODO figure that out
-							vert.normal = glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f));
-							vert.normal_1 = glm::mat3(localNodeMatrix) * glm::vec3(bufferNormalWeight[0] ? glm::make_vec3(&(bufferNormalWeight[0])[v * 3]) : glm::vec3(0.0f));
-							vert.normal_2 = glm::mat3(localNodeMatrix) * glm::vec3(bufferNormalWeight[1] ? glm::make_vec3(&(bufferNormalWeight[1])[v * 3]) : glm::vec3(0.0f));
-									//vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
-							// Vulkan coordinate system
-							vert.pos.y *= -1.0f;
-							vert.pos_1.y *= -1.0f;
-							vert.pos_2.y *= -1.0f;
-							vert.normal.y *= -1.0f;
-							vert.normal_1.y *= -1.0f;
-							vert.normal_2.y *= -1.0f;
-							vertexBuffer.push_back(vert);
-						}
-
-					}
-					// Indices
-					{
-						const tinygltf::Accessor &accessor = model.accessors[primitive.indices];
-						const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
-						const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
-
-						indexCount = static_cast<uint32_t>(accessor.count);
-
-						switch (accessor.componentType) {
-						case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
-							uint32_t *buf = new uint32_t[accessor.count];
-							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint32_t));
-							for (size_t index = 0; index < accessor.count; index++) {
-								indexBuffer.push_back(buf[index] + vertexStart);
-							}
+							a = model.animations.size(); //outer break
 							break;
 						}
-						case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT: {
-							uint16_t *buf = new uint16_t[accessor.count];
-							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint16_t));
-							for (size_t index = 0; index < accessor.count; index++) {
-								indexBuffer.push_back(buf[index] + vertexStart);
-							}
-							break;
-						}
-						case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE: {
-							uint8_t *buf = new uint8_t[accessor.count];
-							memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint8_t));
-							for (size_t index = 0; index < accessor.count; index++) {
-								indexBuffer.push_back(buf[index] + vertexStart);
-							}
-							break;
-						}
-						default:
-							std::cerr << "Index component type " << accessor.componentType << " not supported!" << std::endl;
-							return;
-						}
 					}
-					primitives.push_back({ indexStart, indexCount, materials[primitive.material] });
+				}
+
+				// set init weights of mesh
+				for (size_t i = 0; i < mesh.weights.size(); i++) {
+					pMesh.weightsInit.push_back(static_cast<float>(mesh.weights[i]));
+				}
+
+				// get weight input (times)
+				const tinygltf::Accessor &inputAccessor = model.accessors[pMesh.input];
+				const tinygltf::BufferView &inputView = model.bufferViews[inputAccessor.bufferView];
+				const float* weightTimeBuffer = reinterpret_cast<const float *>(&(model.buffers[inputView.buffer].data[inputAccessor.byteOffset + inputView.byteOffset]));
+				pMesh.weightsTime.resize(inputAccessor.count);
+
+				// We need to copy morph weight data for CPU to calculate during looping
+				// Also trying to avoid C memcpy for safty and true C++ container use
+				for (size_t i = 0; i < pMesh.weightsTime.size(); i++) {
+					pMesh.weightsTime[i] = weightTimeBuffer[i];
+				}
+
+				// now the output (weight data)
+				const tinygltf::Accessor &outputAccessor = model.accessors[pMesh.output];
+				const tinygltf::BufferView &outputView = model.bufferViews[outputAccessor.bufferView];
+				const float* weightDataBuffer = reinterpret_cast<const float *>(&(model.buffers[outputView.buffer].data[outputAccessor.byteOffset + outputView.byteOffset]));
+				pMesh.weightsData.resize(outputAccessor.count);
+
+				for (size_t i = 0; i < pMesh.weightsData.size(); i++) {
+					pMesh.weightsData[i] = weightDataBuffer[i];
+				}
+			}
+
+			for (size_t j = 0; j < mesh.primitives.size(); j++) {
+				const tinygltf::Primitive &primitive = mesh.primitives[j];
+
+				if (primitive.indices < 0) {
+					continue;
+				}
+
+				pMesh.primitives.push_back(vkglTF::Primitive{
+					.firstIndex = static_cast<uint32_t>(indexBuffer.size()),
+					.indexCount = 0,
+					.material = materials[primitive.material],
+				});
+				Primitive &pPrimitive = pMesh.primitives.back();
+
+				uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
+				// Vertices
+				{
+					const float *bufferPos = nullptr;
+					const float *bufferNormals = nullptr;
+					const float *bufferTexCoords = nullptr;
+
+					// Position attribute is required
+					assert(primitive.attributes.find("POSITION") != primitive.attributes.end());
+
+					const tinygltf::Accessor &posAccessor = model.accessors[primitive.attributes.find("POSITION")->second];
+					const tinygltf::BufferView &posView = model.bufferViews[posAccessor.bufferView];
+					bufferPos = reinterpret_cast<const float *>(&(model.buffers[posView.buffer].data[posAccessor.byteOffset + posView.byteOffset]));
+
+					if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
+						const tinygltf::Accessor &normAccessor = model.accessors[primitive.attributes.find("NORMAL")->second];
+						const tinygltf::BufferView &normView = model.bufferViews[normAccessor.bufferView];
+						bufferNormals = reinterpret_cast<const float *>(&(model.buffers[normView.buffer].data[normAccessor.byteOffset + normView.byteOffset]));
+					}
+
+					if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
+						const tinygltf::Accessor &uvAccessor = model.accessors[primitive.attributes.find("TEXCOORD_0")->second];
+						const tinygltf::BufferView &uvView = model.bufferViews[uvAccessor.bufferView];
+						bufferTexCoords = reinterpret_cast<const float *>(&(model.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
+					}
+
+					if (pMesh.isMorphTarget) {
+						for (size_t t = 0; t < primitive.targets.size(); t++) {
+
+							if(primitive.targets[t].find("POSITION") != primitive.targets[t].end()) {
+								const tinygltf::Accessor &posWeightAccessor = model.accessors[primitive.targets[t].find("POSITION")->second];
+								const tinygltf::BufferView &posWeightView = model.bufferViews[posWeightAccessor.bufferView];
+								pPrimitive.morphPos.push_back(reinterpret_cast<const float*>(&(model.buffers[posWeightView.buffer].data[posWeightAccessor.byteOffset + posWeightView.byteOffset])));
+							}
+
+							if(primitive.targets[t].find("NORMAL") != primitive.targets[t].end()) {
+								const tinygltf::Accessor &normalWeightAccessor = model.accessors[primitive.targets[t].find("NORMAL")->second];
+								const tinygltf::BufferView &normalWeightView = model.bufferViews[normalWeightAccessor.bufferView];
+								pPrimitive.morphNormal.push_back(reinterpret_cast<const float*>(&(model.buffers[normalWeightView.buffer].data[normalWeightAccessor.byteOffset + normalWeightView.byteOffset])));
+							}
+
+							if(primitive.targets[t].find("TANGENT") != primitive.targets[t].end()) {
+								const tinygltf::Accessor &tangentWeightAccessor = model.accessors[primitive.targets[t].find("TANGENT")->second];
+								const tinygltf::BufferView &tangentWeightView = model.bufferViews[tangentWeightAccessor.bufferView];
+								pPrimitive.morphTangent.push_back(reinterpret_cast<const float*>(&(model.buffers[tangentWeightView.buffer].data[tangentWeightAccessor.byteOffset + tangentWeightView.byteOffset])));
+							}
+						}
+
+
+					}
+
+					for (size_t v = 0; v < posAccessor.count; v++) {
+						Vertex vert{};
+						vert.pos = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
+						vert.pos *= globalscale;
+						// glm::normalize() causes "nan" TODO figure that out
+						vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
+						//vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
+						// Vulkan coordinate system
+						vert.pos.y *= -1.0f;
+						vert.normal.y *= -1.0f;
+						vertexBuffer.push_back(vert);
+					}
+
+				}
+				// Indices
+				{
+					const tinygltf::Accessor &accessor = model.accessors[primitive.indices];
+					const tinygltf::BufferView &bufferView = model.bufferViews[accessor.bufferView];
+					const tinygltf::Buffer &buffer = model.buffers[bufferView.buffer];
+
+					pPrimitive.indexCount = static_cast<uint32_t>(accessor.count);
+
+					switch (accessor.componentType) {
+					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
+						uint32_t *buf = new uint32_t[accessor.count];
+						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint32_t));
+						for (size_t index = 0; index < accessor.count; index++) {
+							indexBuffer.push_back(buf[index] + vertexStart);
+						}
+						break;
+					}
+					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT: {
+						uint16_t *buf = new uint16_t[accessor.count];
+						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint16_t));
+						for (size_t index = 0; index < accessor.count; index++) {
+							indexBuffer.push_back(buf[index] + vertexStart);
+						}
+						break;
+					}
+					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE: {
+						uint8_t *buf = new uint8_t[accessor.count];
+						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint8_t));
+						for (size_t index = 0; index < accessor.count; index++) {
+							indexBuffer.push_back(buf[index] + vertexStart);
+						}
+						break;
+					}
+					default:
+						std::cerr << "Index component type " << accessor.componentType << " not supported!" << std::endl;
+						return;
+					}
 				}
 			}
 		}
@@ -743,11 +752,14 @@ namespace vkglTF
 
 		void draw(VkCommandBuffer commandBuffer)
 		{
-			const VkDeviceSize offsets[1] = { 0 };
-			vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
-			vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-			for (auto primitive : primitives) {
-				vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+			// TODO this won't work with a multi-mesh object pretty sure
+			for (auto mesh : meshes) {
+				const VkDeviceSize offsets[1] = {0};
+				vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
+				vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+				for (auto primitive : mesh.primitives) {
+					vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+				}
 			}
 		}
 	};
