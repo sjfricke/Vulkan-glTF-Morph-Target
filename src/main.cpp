@@ -294,7 +294,7 @@ public:
 			descriptorSetAllocInfo.descriptorSetCount = 1;
 			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.loader));
 
-			std::array<VkWriteDescriptorSet, 2> writeDescriptorSets{};
+			std::vector<VkWriteDescriptorSet> writeDescriptorSets(2);
 
 			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -307,7 +307,7 @@ public:
 			writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			writeDescriptorSets[1].descriptorCount = 1;
 			writeDescriptorSets[1].dstSet = descriptorSets.loader;
-			writeDescriptorSets[1].dstBinding = 0;
+			writeDescriptorSets[1].dstBinding = 1;
 			writeDescriptorSets[1].pBufferInfo = &uniformBuffers.morphTaret.descriptor;
 
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
@@ -472,6 +472,69 @@ public:
 	 */
 	void prepareStorageBuffers()
 	{
+		VkBuffer stageBuffer;
+		VkDeviceMemory stageMemory;
+		uint32_t stagingSize = static_cast<uint32_t>(models.cube.meshes[0].primitives[0].morphVertexData.size() * sizeof(float));
+
+		VK_CHECK_RESULT(vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+			stagingSize,
+			&stageBuffer,
+			&stageMemory,
+		    models.cube.meshes[0].primitives[0].morphVertexData.data() ));
+
+		VK_CHECK_RESULT(vulkanDevice->createBuffer(
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			stagingSize,
+			&uniformBuffers.morphTaret.buffer,
+			&uniformBuffers.morphTaret.memory));
+
+		// Copy to staging buffer
+		VkCommandPool commandPool;
+		VkCommandPoolCreateInfo cmdPoolInfo = {};
+		cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		cmdPoolInfo.queueFamilyIndex = swapChain.queueNodeIndex; // TODO get a better way
+		cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		VK_CHECK_RESULT(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &commandPool));
+
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
+		cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		cmdBufAllocateInfo.commandPool = commandPool;
+		cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		cmdBufAllocateInfo.commandBufferCount = 1;
+
+		VkCommandBuffer copyCmd;
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &copyCmd));
+		VkCommandBufferBeginInfo cmdBufInfo{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+		VK_CHECK_RESULT(vkBeginCommandBuffer(copyCmd, &cmdBufInfo));
+
+		VkBufferCopy copyRegion = {};
+		copyRegion.size = stagingSize;
+		vkCmdCopyBuffer(copyCmd, stageBuffer, uniformBuffers.morphTaret.buffer, 1, &copyRegion);
+		VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
+
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &copyCmd;
+		VkFenceCreateInfo fenceCreateInfo {};
+		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		fenceCreateInfo.flags = 0;
+		VkFence fence;
+		VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
+
+		// Submit to the queue
+		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
+		VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
+
+		vkDestroyFence(device, fence, nullptr);
+		vkFreeCommandBuffers(device, commandPool, 1, &copyCmd);
+		vkDestroyBuffer(device, stageBuffer, nullptr);
+		vkFreeMemory(device, stageMemory, nullptr);
+		vkDestroyCommandPool(device, commandPool, nullptr);
+
 		uniformBuffers.morphTaret.descriptor = { uniformBuffers.morphTaret.buffer, 0, VK_WHOLE_SIZE };
 	}
 

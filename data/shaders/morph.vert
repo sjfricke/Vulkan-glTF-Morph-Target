@@ -14,6 +14,7 @@ layout (binding = 0) uniform UBO
 	mat4 model;
 } ubo;
 
+#define hardTest 6
 layout(binding = 1) buffer MorphTargets {
    vec3 morphTargets[ ];
 };
@@ -37,7 +38,7 @@ void main()
     vec3 lightPos = vec3(1.0, -1.0, 3.0);
 
 //    vec3 morphPos = inPos + (inPos_1 * pushConsts.morphWeights[0]) + (inPos_2 * pushConsts.morphWeights[1]);
-    vec3 morphPos = inPos + (morphTargets[0] * pushConsts.morphWeights[0]) + (morphTargets[1] * pushConsts.morphWeights[1]);
+    vec3 morphPos = inPos + (morphTargets[hardTest * gl_VertexIndex] * pushConsts.morphWeights[0]) + (morphTargets[hardTest * gl_VertexIndex + 1] * pushConsts.morphWeights[1]);
 //    vec3 morphNormal = inNormal + (inNormal_1 * pushConsts.morphWeights[0]) + (inNormal_2 * pushConsts.morphWeights[1]);
     vec3 morphNormal = inNormal;
 
