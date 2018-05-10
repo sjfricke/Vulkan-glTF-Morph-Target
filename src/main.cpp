@@ -125,7 +125,7 @@ public:
 		VkDescriptorSet cube;
 	} descriptorSets;
 
-	glm::vec3 rotation = glm::vec3(0.0f, 135.0f, 0.0f);
+	glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
 
 	std::vector<float> pushConstWeights;
 	uint32_t currentWeight = 0;
@@ -137,8 +137,8 @@ public:
 		camera.movementSpeed = 2.0f;
 		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
 		camera.rotationSpeed = 0.25f;
-		camera.setRotation({ -12.0f, 170.0f, 0.0f });
-		camera.setPosition({ 1.05f, 0.31f, 4.5f });
+		camera.setRotation({ 0.0f, 0.0f, 0.0f });
+		camera.setPosition({ 0.0f, 0.0f, -3.5f });
 		pushConstWeights = { 0.0f, 0.0f };
 	}
 
@@ -410,6 +410,24 @@ public:
 			loadShader(device, "morph.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
 			loadShader(device, "morph.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 		};
+
+		// Pass NORMAL and TANGENT Morph Target offsets via Specialization Constant
+		// 0x000AABB wher AA == Normal and BB == Tangent data in the int
+		uint32_t testData = 0x300 | 0x01;
+		VkSpecializationMapEntry specializationMapEntry;
+		specializationMapEntry.constantID = 0;
+		specializationMapEntry.offset = 0;
+		specializationMapEntry.size = sizeof(uint32_t);
+
+		VkSpecializationInfo specializationInfo;
+		specializationInfo.mapEntryCount = 1;
+		specializationInfo.pMapEntries = &specializationMapEntry;
+		specializationInfo.dataSize = sizeof(uint32_t);
+		specializationInfo.pData = &testData;
+
+		shaderStages[0].pSpecializationInfo = &specializationInfo;
+
+
 		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.cube));
 		for (auto shaderStage : shaderStages) {
 			vkDestroyShaderModule(device, shaderStage.module, nullptr);

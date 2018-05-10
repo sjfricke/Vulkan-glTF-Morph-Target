@@ -10,6 +10,8 @@ layout (location = 3) in vec3 inNormal;
 layout (location = 4) in vec3 inNormal_1;
 layout (location = 5) in vec3 inNormal_2;
 
+layout (constant_id = 0) const uint morphOffsets = 0;
+
 layout (binding = 0) uniform UBO 
 {
 	mat4 MVP;
@@ -32,7 +34,16 @@ out gl_PerVertex
 
 void main() 
 {
-    vec3 lightPos = vec3(2.0,-2.0,-2.0);
+    float testX = 0.0;
+    float testY = 0.0;
+    for (uint i = 0; i < (morphOffsets & 0xff); i++) {
+        testX += 1.0;
+    }
+    for (uint i = 0; i < (morphOffsets >> 8); i++) {
+        testY -= 1.0;
+    }
+
+    vec3 lightPos = vec3(testX,testY, 2.0);
 
     vec3 morphPos = inPos + (inPos_1 * pushConsts.morphWeights[0]) + (inPos_2 * pushConsts.morphWeights[1]);
 //    vec3 morphNormal = inNormal + (inNormal_1 * pushConsts.morphWeights[0]) + (inNormal_2 * pushConsts.morphWeights[1]);

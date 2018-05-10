@@ -317,6 +317,10 @@ namespace vkglTF
 	};
 
 	/*
+	 	glTF Morph Target class
+	 */
+
+	/*
 		glTF primitive class
 	*/
 	struct Primitive {
