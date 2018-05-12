@@ -6,18 +6,20 @@
 layout (location = 0) in vec3 inPos;
 layout (location = 1) in vec3 inNormal;
 
-layout (constant_id = 0) const uint morphOffsets = 0;
-
-layout (binding = 0) uniform UBO 
+layout (binding = 0) uniform UBO
 {
 	mat4 MVP;
 	mat4 model;
 } ubo;
 
-#define hardTest 6
-layout(binding = 1) buffer MorphTargets {
-   vec3 morphTargets[ ];
-};
+// Tried having the morphTargets.buf a vec3[], but there must be some inheirent padding issues not aware of
+layout(binding = 1) readonly buffer MorphTargets {
+   float buf[];
+} morphTargets;
+
+layout (constant_id = 0) const uint morphBufStride = 1;
+layout (constant_id = 1) const uint morphNormalOffset = 1;
+layout (constant_id = 2) const uint morphTangentOffset = 1;
 
 #define maxMorphCount 8
 
@@ -33,14 +35,33 @@ out gl_PerVertex
 	vec4 gl_Position;
 };
 
-void main() 
+void main()
 {
     vec3 lightPos = vec3(1.0, -1.0, 3.0);
 
-//    vec3 morphPos = inPos + (inPos_1 * pushConsts.morphWeights[0]) + (inPos_2 * pushConsts.morphWeights[1]);
-    vec3 morphPos = inPos + (morphTargets[hardTest * gl_VertexIndex] * pushConsts.morphWeights[0]) + (morphTargets[hardTest * gl_VertexIndex + 1] * pushConsts.morphWeights[1]);
-//    vec3 morphNormal = inNormal + (inNormal_1 * pushConsts.morphWeights[0]) + (inNormal_2 * pushConsts.morphWeights[1]);
+    vec3 morphPos = inPos;
+    for (uint i = 0; i < morphNormalOffset; i++) {
+        morphPos += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
+                         morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
+                         morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
+                         * pushConsts.morphWeights[i];
+    }
+
     vec3 morphNormal = inNormal;
+    for (uint i = morphNormalOffset; i < morphTangentOffset; i++) {
+        morphNormal += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
+                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
+                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
+                          * pushConsts.morphWeights[i];
+    }
+
+//    vec3 morphTagent = inTangent;
+//    for (uint i = morphTangentOffset; i < morphBufStride; i++) {
+//        morphTagent += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
+//                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
+//                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
+//                          * pushConsts.morphWeights[i];
+//    }
 
 	gl_Position = ubo.MVP * vec4(morphPos, 1.0);
 

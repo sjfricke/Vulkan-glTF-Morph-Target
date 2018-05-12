@@ -326,6 +326,9 @@ namespace vkglTF
 
 		// In order [POS_0, POS_1... NORMAL_0, NORMAL_1... TANGENT_0, TANGENT_1..]
 		std::vector<float> morphVertexData; // TODO clear after device transfer
+		uint32_t morphVertexStride;
+		uint32_t normalOffset;  // where in morphVertexData it starts
+		uint32_t tangentOffset; // where in morphVertexData it starts
 	};
 
 	/*
@@ -529,6 +532,7 @@ namespace vkglTF
 								morphVertexCount = posWeightAccessor.count; // TODO https://github.com/KhronosGroup/glTF/issues/1339
 							}
 						}
+						pPrimitive.normalOffset = static_cast<uint8_t>(morphBuffer.size());
 
 						for (size_t t = 0; t < primitive.targets.size(); t++) {
 							if(primitive.targets[t].find("NORMAL") != primitive.targets[t].end()) {
@@ -537,25 +541,31 @@ namespace vkglTF
 								morphBuffer.push_back(reinterpret_cast<const float*>(&(model.buffers[normalWeightView.buffer].data[normalWeightAccessor.byteOffset + normalWeightView.byteOffset])));
 							}
 						}
+						pPrimitive.tangentOffset = static_cast<uint8_t>(morphBuffer.size());
 
-						for (size_t t = 0; t < primitive.targets.size(); t++) {
-							if(primitive.targets[t].find("TANGENT") != primitive.targets[t].end()) {
-								const tinygltf::Accessor &tangentWeightAccessor = model.accessors[primitive.targets[t].find("TANGENT")->second];
-								const tinygltf::BufferView &tangentWeightView = model.bufferViews[tangentWeightAccessor.bufferView];
-								morphBuffer.push_back(reinterpret_cast<const float*>(&(model.buffers[tangentWeightView.buffer].data[tangentWeightAccessor.byteOffset + tangentWeightView.byteOffset])));
-							}
-						}
+//						for (size_t t = 0; t < primitive.targets.size(); t++) {
+//							if(primitive.targets[t].find("TANGENT") != primitive.targets[t].end()) {
+//								const tinygltf::Accessor &tangentWeightAccessor = model.accessors[primitive.targets[t].find("TANGENT")->second];
+//								const tinygltf::BufferView &tangentWeightView = model.bufferViews[tangentWeightAccessor.bufferView];
+//								morphBuffer.push_back(reinterpret_cast<const float*>(&(model.buffers[tangentWeightView.buffer].data[tangentWeightAccessor.byteOffset + tangentWeightView.byteOffset])));
+//							}
+//						}
 
+						pPrimitive.morphVertexStride = morphBuffer.size();
 						// Pack data in VAO style
 						// Can assume all vec3 from spec
 						for (size_t i = 0; i < morphVertexCount; i++) {
+							// TODO - Hard testing just the vertex with localNodeMatrix tranform
 							for (size_t j = 0; j < morphBuffer.size(); j++) {
-								pPrimitive.morphVertexData.push_back(morphBuffer[j][i * 3]);
-								pPrimitive.morphVertexData.push_back(morphBuffer[j][i * 3 + 1]);
-								pPrimitive.morphVertexData.push_back(morphBuffer[j][i * 3 + 2]);
+								glm::vec3 temp = localNodeMatrix * glm::vec4(glm::make_vec3(&(morphBuffer[j])[i * 3]), 1.0f);
+								temp *= globalscale;
+								temp.y *= -1.0f;
+								pPrimitive.morphVertexData.push_back(temp.x);
+								pPrimitive.morphVertexData.push_back(temp.y);
+								pPrimitive.morphVertexData.push_back(temp.z);
 							}
-						}
 
+						}
 					}
 
 					for (size_t v = 0; v < posAccessor.count; v++) {

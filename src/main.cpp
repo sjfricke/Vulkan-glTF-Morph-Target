@@ -422,19 +422,45 @@ public:
 			loadShader(device, "morph.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 		};
 
-		// Pass NORMAL and TANGENT Morph Target offsets via Specialization Constant
-		// 0x000AABB wher AA == Normal and BB == Tangent data in the int
-		uint32_t testData = 0x300 | 0x01;
-		VkSpecializationMapEntry specializationMapEntry;
-		specializationMapEntry.constantID = 0;
-		specializationMapEntry.offset = 0;
-		specializationMapEntry.size = sizeof(uint32_t);
+		/*
+		 * Specialization constant
+		 * layout (constant_id = 0) const uint morphBufStride = 1;
+		 * layout (constant_id = 1) const uint morphNormalOffset = 0;
+		 * layout (constant_id = 2) const uint morphTangentOffset = 0;
+		 *
+		 * offset is where normal and tangent start in stride
+		 */
+		// TODO use uint8_t instead?
+		struct MorphSpecializationConstant {
+			uint32_t bufStride;
+			uint32_t normalOffset;
+			uint32_t tangentOffset;
+		} morphSC;
+
+
+		morphSC.bufStride = models.cube.meshes[0].primitives[0].morphVertexStride;
+		morphSC.normalOffset = models.cube.meshes[0].primitives[0].normalOffset;
+		morphSC.tangentOffset = models.cube.meshes[0].primitives[0].tangentOffset;
+
+		std::array<VkSpecializationMapEntry, 3> specializationMapEntries;
+
+		specializationMapEntries[0].constantID = 0;
+		specializationMapEntries[0].size = sizeof(morphSC.bufStride);
+		specializationMapEntries[0].offset = 0;
+
+		specializationMapEntries[1].constantID = 1;
+		specializationMapEntries[1].size = sizeof(morphSC.normalOffset);
+		specializationMapEntries[1].offset = sizeof(morphSC.bufStride);
+
+		specializationMapEntries[2].constantID = 2;
+		specializationMapEntries[2].size = sizeof(morphSC.tangentOffset);
+		specializationMapEntries[2].offset = sizeof(morphSC.bufStride) + sizeof(morphSC.normalOffset);
 
 		VkSpecializationInfo specializationInfo;
-		specializationInfo.mapEntryCount = 1;
-		specializationInfo.pMapEntries = &specializationMapEntry;
-		specializationInfo.dataSize = sizeof(uint32_t);
-		specializationInfo.pData = &testData;
+		specializationInfo.mapEntryCount = static_cast<uint32_t>(specializationMapEntries.size());;
+		specializationInfo.pMapEntries = specializationMapEntries.data();
+		specializationInfo.dataSize = sizeof(morphSC);
+		specializationInfo.pData = &morphSC;
 
 		shaderStages[0].pSpecializationInfo = &specializationInfo;
 
