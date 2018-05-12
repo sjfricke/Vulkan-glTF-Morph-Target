@@ -251,6 +251,7 @@ public:
 		}
 #endif
 		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
 
 		// Need to wait until we get morph target data to build storage buffer for it
 		prepareStorageBuffers();
@@ -387,9 +388,11 @@ public:
 		// Vertex bindings an attributes
 		VkVertexInputBindingDescription vertexInputBinding = { 0, sizeof(vkglTF::Model::Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
 		std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
-			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 }, // inPos
-			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3 }, // inNormal
+			{ 0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(vkglTF::Model::Vertex, pos) }, // inPos
+			{ 1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(vkglTF::Model::Vertex, normal) }, // inNormal
+			{ 2, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(vkglTF::Model::Vertex, tangent) }, // inTangent
 		};
+
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCI{};
 		vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 		vertexInputStateCI.vertexBindingDescriptionCount = 1;

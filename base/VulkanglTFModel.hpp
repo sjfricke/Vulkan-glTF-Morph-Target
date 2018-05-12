@@ -355,6 +355,7 @@ namespace vkglTF
 		struct Vertex {
 			glm::vec3 pos;
 			glm::vec3 normal;
+			glm::vec3 tangent;
 		};
 
 		struct Vertices {
@@ -543,13 +544,13 @@ namespace vkglTF
 						}
 						pPrimitive.tangentOffset = static_cast<uint8_t>(morphBuffer.size());
 
-//						for (size_t t = 0; t < primitive.targets.size(); t++) {
-//							if(primitive.targets[t].find("TANGENT") != primitive.targets[t].end()) {
-//								const tinygltf::Accessor &tangentWeightAccessor = model.accessors[primitive.targets[t].find("TANGENT")->second];
-//								const tinygltf::BufferView &tangentWeightView = model.bufferViews[tangentWeightAccessor.bufferView];
-//								morphBuffer.push_back(reinterpret_cast<const float*>(&(model.buffers[tangentWeightView.buffer].data[tangentWeightAccessor.byteOffset + tangentWeightView.byteOffset])));
-//							}
-//						}
+						for (size_t t = 0; t < primitive.targets.size(); t++) {
+							if(primitive.targets[t].find("TANGENT") != primitive.targets[t].end()) {
+								const tinygltf::Accessor &tangentWeightAccessor = model.accessors[primitive.targets[t].find("TANGENT")->second];
+								const tinygltf::BufferView &tangentWeightView = model.bufferViews[tangentWeightAccessor.bufferView];
+								morphBuffer.push_back(reinterpret_cast<const float*>(&(model.buffers[tangentWeightView.buffer].data[tangentWeightAccessor.byteOffset + tangentWeightView.byteOffset])));
+							}
+						}
 
 						pPrimitive.morphVertexStride = morphBuffer.size();
 						// Pack data in VAO style
@@ -572,16 +573,20 @@ namespace vkglTF
 						Vertex vert{};
 						vert.pos = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
 						vert.pos *= globalscale;
+
 						// glm::normalize() causes "nan" TODO figure that out
 						vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
+
 						//vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
+						vert.tangent = glm::vec3(0.0f);
+
 						// Vulkan coordinate system
 						vert.pos.y *= -1.0f;
 						vert.normal.y *= -1.0f;
 						vertexBuffer.push_back(vert);
 					}
-
 				}
+
 				// Indices
 				{
 					const tinygltf::Accessor &accessor = model.accessors[primitive.indices];

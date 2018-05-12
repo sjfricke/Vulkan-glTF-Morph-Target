@@ -5,6 +5,7 @@
 
 layout (location = 0) in vec3 inPos;
 layout (location = 1) in vec3 inNormal;
+layout (location = 1) in vec3 inTangent;
 
 layout (binding = 0) uniform UBO
 {
@@ -55,13 +56,14 @@ void main()
                           * pushConsts.morphWeights[i];
     }
 
-//    vec3 morphTagent = inTangent;
-//    for (uint i = morphTangentOffset; i < morphBufStride; i++) {
-//        morphTagent += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
-//                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
-//                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
-//                          * pushConsts.morphWeights[i];
-//    }
+    // unused at the moment
+    vec3 morphTagent = inTangent;
+    for (uint i = morphTangentOffset; i < morphBufStride; i++) {
+        morphTagent += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
+                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
+                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
+                          * pushConsts.morphWeights[i];
+    }
 
 	gl_Position = ubo.MVP * vec4(morphPos, 1.0);
 
