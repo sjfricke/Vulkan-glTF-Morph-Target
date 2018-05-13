@@ -51,7 +51,7 @@
 
 class VulkanExampleBase
 {
-private:	
+private:
 	float fpsTimer = 0.0f;
 	uint32_t frameCounter = 0;
 	uint32_t lastFPS = 0;

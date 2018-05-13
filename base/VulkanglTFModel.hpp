@@ -345,6 +345,10 @@ namespace vkglTF
 		std::vector<float> weightsTime;
 		std::vector<float> weightsData;
 		std::vector<Primitive> primitives;
+
+		// for keeping state of animation
+		float currentTime = 0.0f;
+		uint32_t currentIndex = 0;
 	};
 
 	/*

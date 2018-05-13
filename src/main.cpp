@@ -128,8 +128,8 @@ public:
 
 	glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
 
+	// TODO, per mesh, not global
 	std::vector<float> pushConstWeights;
-	uint32_t currentWeight = 0;
 
 	VulkanExample() : VulkanExampleBase()
 	{
@@ -612,14 +612,36 @@ public:
 		VulkanExampleBase::submitFrame();
 		VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 		if (!paused) {
-			test += 1;
-			if (test % 50 == 0) {
-				for (size_t i = 0; i < 2; i++) {
-					pushConstWeights[i] = models.cube.meshes[0].weightsData[currentWeight * 2 + i];
-				}
-				currentWeight++;
-				if (currentWeight >= 127) { currentWeight = 0; }
-				reBuildCommandBuffers();
+			// TODO support other then LINEAR
+			for (auto& mesh: models.cube.meshes) {
+				// add to currentTimer, check if meets next animation keyframe, set pushConstant weights
+				mesh.currentTime += frameTimer;
+				if (mesh.currentTime > mesh.weightsTime[mesh.currentIndex + 1]) {
+					mesh.currentIndex++;
+
+					// check if currentIndex needs to be reset or can skipped index
+					while(true) {
+						if (mesh.currentIndex >= mesh.weightsTime.size()) {
+							mesh.currentIndex = 0;
+							mesh.currentTime = 0.0f;
+							break;
+						}
+
+						if (mesh.currentTime > mesh.weightsTime[mesh.currentIndex + 1]) {
+							mesh.currentIndex++;
+						} else {
+							break;
+						}
+					}
+
+					// update all weight data
+					for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+						pushConstWeights[i] = mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+					}
+
+					reBuildCommandBuffers();
+
+				} // else same weights as last frame
 			}
 		}
 	}
