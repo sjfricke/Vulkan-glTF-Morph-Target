@@ -11,6 +11,7 @@ layout (binding = 0) uniform UBO
 {
 	mat4 MVP;
 	mat4 model;
+	vec4 camera;
 } ubo;
 
 // Tried having the morphTargets.buf a vec3[], but there must be some inheirent padding issues not aware of
@@ -30,47 +31,48 @@ layout(push_constant) uniform PushConsts {
 
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outLightVec;
+layout (location = 2) out vec3 outViewVec;
 
 out gl_PerVertex
 {
 	vec4 gl_Position;
 };
 
+uint pIndex;
 void main()
 {
-    vec3 lightPos = vec3(1.0, -1.0, 3.0);
-
+    vec3 lightPos = vec3(2.0, -0.5, 2.0);
     vec3 morphPos = inPos;
-    for (uint i = 0; i < morphNormalOffset; i++) {
+
+    for (uint i = 0, pIndex = 0; i < morphNormalOffset; i++, pIndex++) {
         morphPos += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
                          morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
                          morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
-                         * pushConsts.morphWeights[i];
+                         * pushConsts.morphWeights[pIndex];
     }
 
     vec3 morphNormal = inNormal;
-    for (uint i = morphNormalOffset; i < morphTangentOffset; i++) {
+    for (uint i = morphNormalOffset, pIndex = 0; i < morphTangentOffset; i++, pIndex++) {
         morphNormal += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
                             morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
                             morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
-                          * pushConsts.morphWeights[i];
+                          * pushConsts.morphWeights[pIndex];
     }
 
     // unused at the moment
     vec3 morphTagent = inTangent;
-    for (uint i = morphTangentOffset; i < morphBufStride; i++) {
+    for (uint i = morphTangentOffset, pIndex = 0; i < morphBufStride; i++, pIndex++) {
         morphTagent += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
                             morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
                             morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
-                          * pushConsts.morphWeights[i];
+                          * pushConsts.morphWeights[pIndex];
     }
 
 	gl_Position = ubo.MVP * vec4(morphPos, 1.0);
 
-    outNormal = transpose(inverse(mat3(ubo.model))) * morphNormal;
-
     vec4 pos = ubo.model * vec4(inPos, 1.0);
-    outNormal = mat3(inverse(transpose(ubo.model))) * inNormal;
+    outNormal = mat3(inverse(transpose(ubo.model))) * morphNormal;
     vec3 lPos = mat3(ubo.model) * lightPos;
     outLightVec = lPos - pos.xyz;
+    outViewVec = ubo.camera.xyz - pos.xyz;
 }

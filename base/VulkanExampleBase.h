@@ -111,7 +111,7 @@ public:
 	bool paused = false;
 
 	struct Settings {
-		bool validation = true;
+		bool validation = false;
 		bool fullscreen = false;
 		bool vsync = false;
 		bool multiSampling = false;

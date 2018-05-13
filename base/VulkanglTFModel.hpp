@@ -435,26 +435,26 @@ namespace vkglTF
 
 			if (pMesh.isMorphTarget) {
 				// find sampler to node's mesh
-				for (size_t a = 0; a < model.animations.size(); a++) {
-					for (size_t c = 0; c < model.animations[a].channels.size(); c++) {
-						if (model.animations[a].channels[c].target_node == nodeIndex &&
-							model.animations[a].channels[c].target_path == "weights") {
-
-							pMesh.sampler = model.animations[a].channels[c].sampler;
-							pMesh.input = model.animations[a].samplers[pMesh.sampler].input;
-							pMesh.output = model.animations[a].samplers[pMesh.sampler].output;
-							if (model.animations[a].samplers[pMesh.sampler].interpolation == "STEP") {
+				bool foundSampler = false;
+				for (auto& animation : model.animations) {
+					for (auto& channel : animation.channels) {
+						if (channel.target_node == nodeIndex &&	channel.target_path == "weights") {
+							pMesh.sampler = channel.sampler;
+							pMesh.input = animation.samplers[pMesh.sampler].input;
+							pMesh.output = animation.samplers[pMesh.sampler].output;
+							if (animation.samplers[pMesh.sampler].interpolation == "STEP") {
 								pMesh.interpolation = Mesh::STEP;
-							} else if (model.animations[a].samplers[pMesh.sampler].interpolation == "CUBICSPLINE") {
+							} else if (animation.samplers[pMesh.sampler].interpolation == "CUBICSPLINE") {
 								pMesh.interpolation = Mesh::CUBICSPLINE;
 							} else { // LINEAR as default incase glTF file is invalid
 								pMesh.interpolation = Mesh::LINEAR;
 							}
 
-							a = model.animations.size(); //outer break
+							foundSampler = true;
 							break;
 						}
 					}
+					if (foundSampler) { break; }
 				}
 
 				// set init weights of mesh
@@ -485,8 +485,7 @@ namespace vkglTF
 				}
 			}
 
-			for (size_t j = 0; j < mesh.primitives.size(); j++) {
-				const tinygltf::Primitive &primitive = mesh.primitives[j];
+			for (auto& primitive : mesh.primitives) {
 
 				if (primitive.indices < 0) {
 					continue;
@@ -560,16 +559,22 @@ namespace vkglTF
 						// Pack data in VAO style
 						// Can assume all vec3 from spec
 						for (size_t i = 0; i < morphVertexCount; i++) {
-							// TODO - Hard testing just the vertex with localNodeMatrix tranform
-							for (size_t j = 0; j < morphBuffer.size(); j++) {
+							// Position data inserted first
+							for (size_t j = 0; j <  morphBuffer.size(); j++) {
 								glm::vec3 temp = localNodeMatrix * glm::vec4(glm::make_vec3(&(morphBuffer[j])[i * 3]), 1.0f);
-								temp *= globalscale;
+
+								if (j < pPrimitive.normalOffset) {
+									// only position get global scaled up
+									temp *= globalscale;
+								} else if (temp.x != 0 || temp.y != 0 ||  temp.z != 0) { // glm::normalize() causes "nan" TODO figure that out
+									// need to normalize normal/tangent vectors
+									temp = glm::normalize(temp);
+								}
 								temp.y *= -1.0f;
 								pPrimitive.morphVertexData.push_back(temp.x);
 								pPrimitive.morphVertexData.push_back(temp.y);
 								pPrimitive.morphVertexData.push_back(temp.z);
 							}
-
 						}
 					}
 

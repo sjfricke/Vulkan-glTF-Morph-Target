@@ -110,6 +110,7 @@ public:
 	struct UBOMatrices {
 		glm::mat4 MVP;
 		glm::mat4 model;
+		glm::vec4 camera;
 	} uboMatrices;
 
 	VkPipelineLayout pipelineLayout;
@@ -250,8 +251,9 @@ public:
 			exit(-1);
 		}
 #endif
-		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
-//		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
+		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/test/BoomBox/glTF/BoomBox.gltf", vulkanDevice, queue);
 
 		// Need to wait until we get morph target data to build storage buffer for it
 		prepareStorageBuffers();
@@ -449,15 +451,15 @@ public:
 
 		specializationMapEntries[0].constantID = 0;
 		specializationMapEntries[0].size = sizeof(morphSC.bufStride);
-		specializationMapEntries[0].offset = 0;
+		specializationMapEntries[0].offset = offsetof(MorphSpecializationConstant, bufStride);
 
 		specializationMapEntries[1].constantID = 1;
 		specializationMapEntries[1].size = sizeof(morphSC.normalOffset);
-		specializationMapEntries[1].offset = sizeof(morphSC.bufStride);
+		specializationMapEntries[1].offset = offsetof(MorphSpecializationConstant, normalOffset);
 
 		specializationMapEntries[2].constantID = 2;
 		specializationMapEntries[2].size = sizeof(morphSC.tangentOffset);
-		specializationMapEntries[2].offset = sizeof(morphSC.bufStride) + sizeof(morphSC.normalOffset);
+		specializationMapEntries[2].offset = offsetof(MorphSpecializationConstant, tangentOffset);
 
 		VkSpecializationInfo specializationInfo;
 		specializationInfo.mapEntryCount = static_cast<uint32_t>(specializationMapEntries.size());;
@@ -573,7 +575,7 @@ public:
 		uboMatrices.model = glm::mat4(1.0f);
 		uboMatrices.model = glm::rotate(uboMatrices.model, rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
 		uboMatrices.MVP = camera.matrices.perspective * camera.matrices.view * uboMatrices.model;
-//		uboMatrices.camPos = camera.position * -1.0f;
+		uboMatrices.camera = glm::vec4(camera.position * -1.0f, 1.0f);
 		memcpy(uniformBuffers.cube.mapped, &uboMatrices, sizeof(uboMatrices));
 	}
 
@@ -612,8 +614,10 @@ public:
 		VulkanExampleBase::submitFrame();
 		VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 		if (!paused) {
-			// TODO support other then LINEAR
+			// TODO support actual interpolation between frames
 			for (auto& mesh: models.cube.meshes) {
+				if (!mesh.isMorphTarget) { continue; }
+
 				// add to currentTimer, check if meets next animation keyframe, set pushConstant weights
 				mesh.currentTime += frameTimer;
 				if (mesh.currentTime > mesh.weightsTime[mesh.currentIndex + 1]) {
