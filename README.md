@@ -1,12 +1,26 @@
 # Vulkan Morph Targets (Blend Shapes) using glTF 2.0 models
 
-## WORK IN PROGRESS - DONE VERY SOON
+![cube demo](screenshots/cubeDemo.gif)
 
-This was made to be a proof of concepts for people to reference when hacking at their own project
+This was made to be a proof of concepts for people to reference when hacking at their own project. **CURRENTLY JUST A BASIC IMPLEMENTATION** as there are many more part I am *activly* working on atm. **PLEASE** feel free to drop issues or PR!
+
+- [x] Loads in glTF 2.0 Morph Target files
+- [x] Dynamic shaders via SSBO and Specializatio Constant
+- [x] Specular based lighting
+- [ ] Get more testing models
+- [ ] Interpolation of timing (currently only use index in file linearly)
+- [ ] Create pipeline per mesh to allow multiple models
+- [ ] Allow glTF with more then 1 mesh
+- [ ] Allow glTF with more then 1 primative
+- [ ] Allow glTF with child nodes
+- [ ] UV Texture
+- [ ] Materials
+- [ ] Use tangents in morph
+- [ ] Be able to load non-morph target examples with this demo (some hardcode)
 
 ## Credit
 
-Most of the template is from [Sascha Willem's Vulkan-glTF-PBR demo](https://github.com/SaschaWillems/Vulkan-glTF-PBR) so huge shout out to him! I wanted to use morph targets for my own purpose, knew [glTF had it in its specification](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#morph-targets) and decided to create a demo since no one else seems to have.
+Most of the template is from [Sascha Willem's Vulkan-glTF-PBR demo](https://github.com/SaschaWillems/Vulkan-glTF-PBR) so huge shout out to him! I wanted to use morph targets for my own purpose, knew [glTF had it in its specification](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#morph-targets) and decided to create a demo since no one else seems to have for Vulkan.
 
 For info how to read in morph targets from a glTF file check out the great two tutorials from the KhronosGroup/glTF-Tutorials repo
 - [Simple Morph Target](https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_017_SimpleMorphTarget.md)
@@ -17,6 +31,18 @@ For info how to read in morph targets from a glTF file check out the great two t
 Model loading and rendering is implemented in the [vkglTF::Model](./base/VulkanglTFModel.hpp) class and uses the [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files. 
 
 Note that this is not a full glTF model class implementation, this was to show the steps for morph target rendering/parsing.
+
+All the `"targets"` bufferViews are found (up to 8 total atm) and then all the morph target data is packed in a VAO style format to a storage buffer in ther vertex shader with position then normal then tangent
+
+```
+ vec3[] = {POS_0, POS_1, POS_2, ..., POS_N}
+ // or
+ vec3[] = {POS_0, POS_1, ..., POS_N, NORMAL_0, NORMAL_1, ..., NORMAL_N}
+ // or
+ vec3[] = {POS_0, POS_1, NORMAL_0, NORMAL_1, TANGENT_0, TANGENT_1}
+```
+
+All the weights are passed in via Push Constants.
 
 ## Cloning
 

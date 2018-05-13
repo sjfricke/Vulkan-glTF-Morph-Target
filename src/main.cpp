@@ -251,8 +251,8 @@ public:
 			exit(-1);
 		}
 #endif
-//		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
-		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
+		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/test/BoomBox/glTF/BoomBox.gltf", vulkanDevice, queue);
 
 		// Need to wait until we get morph target data to build storage buffer for it
