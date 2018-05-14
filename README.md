@@ -32,7 +32,7 @@ Model loading and rendering is implemented in the [vkglTF::Model](./base/Vulkang
 
 Note that this is not a full glTF model class implementation, this was to show the steps for morph target rendering/parsing.
 
-All the `"targets"` bufferViews are found (up to 8 total atm) and then all the morph target data is packed in a VAO style format to a storage buffer in ther vertex shader with position then normal then tangent
+All the `"targets"` bufferViews are found and then all the morph target data is packed in a VAO style format to a storage buffer in ther vertex shader with position then normal then tangent
 
 ```
  vec3[] = {POS_0, POS_1, POS_2, ..., POS_N}
@@ -42,7 +42,7 @@ All the `"targets"` bufferViews are found (up to 8 total atm) and then all the m
  vec3[] = {POS_0, POS_1, NORMAL_0, NORMAL_1, TANGENT_0, TANGENT_1}
 ```
 
-All the weights are passed in via Push Constants.
+All the weights are passed in via Push Constants witha max of 8 right now, can be adjusted in `morph.vert` and in `pushConstantRange.size`.
 
 ## Cloning
 
