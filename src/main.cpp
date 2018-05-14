@@ -30,6 +30,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "tiny_gltf.h"
 
+#define MAX_WEIGHTS 8
+
 /*
 	Utility functions
 */
@@ -130,18 +132,23 @@ public:
 	glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
 
 	// TODO, per mesh, not global
-	std::vector<float> pushConstWeights;
+	struct {
+		uint32_t bufferOffset;
+		uint32_t normalOffset;
+		uint32_t tangentOffset;
+		uint32_t vertexStride;
+		float    weights[MAX_WEIGHTS];
+	} morphPushConst;
 
 	VulkanExample() : VulkanExampleBase()
 	{
 		title = "Vulkan glTf 2.0 Morph Target";
 		camera.type = Camera::CameraType::firstperson;
 		camera.movementSpeed = 2.0f;
-		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
+		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 1024.0f);
 		camera.rotationSpeed = 0.25f;
 		camera.setRotation({ 0.0f, 0.0f, 0.0f });
 		camera.setPosition({ 0.0f, 0.0f, -3.5f });
-		pushConstWeights = { 0.0f, 0.0f };
 	}
 
 	~VulkanExample()
@@ -157,17 +164,6 @@ public:
 		vkFreeMemory(device, uniformBuffers.cube.memory, nullptr);
 		vkDestroyBuffer(device, uniformBuffers.morphTaret.buffer, nullptr);
 		vkFreeMemory(device, uniformBuffers.morphTaret.memory, nullptr);
-	}
-
-	void renderPrimitive(vkglTF::Model &model, vkglTF::Primitive &primitive, VkCommandBuffer commandBuffer) {
-		std::array<VkDescriptorSet, 2> descriptorsets = {
-			descriptorSets.loader,
-			primitive.material.descriptorSet,
-		};
-
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 2, descriptorsets.data(), 0, NULL);
-
-		vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 	}
 
 	void reBuildCommandBuffers()
@@ -226,7 +222,7 @@ public:
 			VkDeviceSize offsets[1] = { 0 };
 
 			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.loader, 0, NULL);
-			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, pushConstWeights.size() * sizeof(float), pushConstWeights.data());
+			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(morphPushConst), &morphPushConst);
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.loader);
 			models.cube.draw(drawCmdBuffers[i]);
 
@@ -254,6 +250,8 @@ public:
 		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/test/BoomBox/glTF/BoomBox.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/twoCubeMorph/twoCubeMorph.gltf", vulkanDevice, queue);
+
 
 		// Need to wait until we get morph target data to build storage buffer for it
 		prepareStorageBuffers();
@@ -380,7 +378,7 @@ public:
 		pipelineLayoutCI.setLayoutCount = 1;
 		pipelineLayoutCI.pSetLayouts = setLayouts.data();
 		VkPushConstantRange pushConstantRange{};
-		pushConstantRange.size = pushConstWeights.size() * sizeof(float);
+		pushConstantRange.size = sizeof(morphPushConst);
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		pipelineLayoutCI.pushConstantRangeCount = 1;
 		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
@@ -427,48 +425,10 @@ public:
 			loadShader(device, "morph.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 		};
 
-		/*
-		 * Specialization constant
-		 * layout (constant_id = 0) const uint morphBufStride = 1;
-		 * layout (constant_id = 1) const uint morphNormalOffset = 0;
-		 * layout (constant_id = 2) const uint morphTangentOffset = 0;
-		 *
-		 * offset is where normal and tangent start in stride
-		 */
-		// TODO use uint8_t instead?
-		struct MorphSpecializationConstant {
-			uint32_t bufStride;
-			uint32_t normalOffset;
-			uint32_t tangentOffset;
-		} morphSC;
-
-
-		morphSC.bufStride = models.cube.meshes[0].primitives[0].morphVertexStride;
-		morphSC.normalOffset = models.cube.meshes[0].primitives[0].normalOffset;
-		morphSC.tangentOffset = models.cube.meshes[0].primitives[0].tangentOffset;
-
-		std::array<VkSpecializationMapEntry, 3> specializationMapEntries;
-
-		specializationMapEntries[0].constantID = 0;
-		specializationMapEntries[0].size = sizeof(morphSC.bufStride);
-		specializationMapEntries[0].offset = offsetof(MorphSpecializationConstant, bufStride);
-
-		specializationMapEntries[1].constantID = 1;
-		specializationMapEntries[1].size = sizeof(morphSC.normalOffset);
-		specializationMapEntries[1].offset = offsetof(MorphSpecializationConstant, normalOffset);
-
-		specializationMapEntries[2].constantID = 2;
-		specializationMapEntries[2].size = sizeof(morphSC.tangentOffset);
-		specializationMapEntries[2].offset = offsetof(MorphSpecializationConstant, tangentOffset);
-
-		VkSpecializationInfo specializationInfo;
-		specializationInfo.mapEntryCount = static_cast<uint32_t>(specializationMapEntries.size());;
-		specializationInfo.pMapEntries = specializationMapEntries.data();
-		specializationInfo.dataSize = sizeof(morphSC);
-		specializationInfo.pData = &morphSC;
-
-		shaderStages[0].pSpecializationInfo = &specializationInfo;
-
+		morphPushConst.bufferOffset = 0;
+		morphPushConst.normalOffset = models.cube.meshes[0].primitives[0].normalOffset;
+		morphPushConst.tangentOffset = models.cube.meshes[0].primitives[0].tangentOffset;
+		morphPushConst.vertexStride = models.cube.meshes[0].primitives[0].morphVertexStride;
 
 		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.loader));
 		for (auto shaderStage : shaderStages) {
@@ -614,6 +574,12 @@ public:
 		VulkanExampleBase::submitFrame();
 		VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 		if (!paused) {
+//			test++;
+//			if (test % 500 == 0) {
+//				test = 0;
+//				std::cout << getWindowTitle() << std::endl;
+//			}
+
 			// TODO support actual interpolation between frames
 			for (auto& mesh: models.cube.meshes) {
 				if (!mesh.isMorphTarget) { continue; }
@@ -639,8 +605,8 @@ public:
 					}
 
 					// update all weight data
-					for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
-						pushConstWeights[i] = mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+					for (size_t i = 0; i < mesh.weightsInit.size() && i < MAX_WEIGHTS; i++) {
+						morphPushConst.weights[i] = mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
 					}
 
 					reBuildCommandBuffers();

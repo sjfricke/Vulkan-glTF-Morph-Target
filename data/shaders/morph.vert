@@ -19,15 +19,15 @@ layout(binding = 1) readonly buffer MorphTargets {
    float buf[];
 } morphTargets;
 
-layout (constant_id = 0) const uint morphBufStride = 1;
-layout (constant_id = 1) const uint morphNormalOffset = 1;
-layout (constant_id = 2) const uint morphTangentOffset = 1;
-
-#define maxMorphCount 8
+#define MAX_WEIGHTS 8
 
 layout(push_constant) uniform PushConsts {
-	float morphWeights[maxMorphCount];
-} pushConsts;
+    uint  bufferOffset;
+	uint  normalOffset;
+	uint  tangentOffset;
+	uint  vertexStride;
+	float weights[MAX_WEIGHTS];
+} push;
 
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outLightVec;
@@ -44,28 +44,28 @@ void main()
     vec3 lightPos = vec3(2.0, -0.5, 2.0);
     vec3 morphPos = inPos;
 
-    for (uint i = 0, pIndex = 0; i < morphNormalOffset; i++, pIndex++) {
-        morphPos += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
-                         morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
-                         morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
-                         * pushConsts.morphWeights[pIndex];
+    for (uint i = 0, pIndex = 0; i < push.normalOffset; i++, pIndex++) {
+        morphPos += vec3(morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 0],
+                         morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 1],
+                         morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 2])
+                         * push.weights[pIndex];
     }
 
     vec3 morphNormal = inNormal;
-    for (uint i = morphNormalOffset, pIndex = 0; i < morphTangentOffset; i++, pIndex++) {
-        morphNormal += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
-                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
-                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
-                          * pushConsts.morphWeights[pIndex];
+    for (uint i = push.normalOffset, pIndex = 0; i < push.tangentOffset; i++, pIndex++) {
+        morphNormal += vec3(morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 0],
+                            morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 1],
+                            morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 2])
+                          * push.weights[pIndex];
     }
 
     // unused at the moment
     vec3 morphTagent = inTangent;
-    for (uint i = morphTangentOffset, pIndex = 0; i < morphBufStride; i++, pIndex++) {
-        morphTagent += vec3(morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 0],
-                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 1],
-                            morphTargets.buf[(morphBufStride * gl_VertexIndex * 3) + (i * 3) + 2])
-                          * pushConsts.morphWeights[pIndex];
+    for (uint i = push.tangentOffset, pIndex = 0; i < push.vertexStride; i++, pIndex++) {
+        morphTagent += vec3(morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 0],
+                            morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 1],
+                            morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 2])
+                          * push.weights[pIndex];
     }
 
 	gl_Position = ubo.MVP * vec4(morphPos, 1.0);

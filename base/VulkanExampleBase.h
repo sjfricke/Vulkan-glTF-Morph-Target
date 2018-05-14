@@ -55,7 +55,6 @@ private:
 	float fpsTimer = 0.0f;
 	uint32_t frameCounter = 0;
 	uint32_t lastFPS = 0;
-	std::string getWindowTitle();
 	bool viewUpdated = false;
 	uint32_t destWidth;
 	uint32_t destHeight;
@@ -100,7 +99,8 @@ protected:
 	std::vector<VkFence> waitFences;
 	std::string title = "Vulkan Example";
 	std::string name = "vulkanExample";
-public: 
+	std::string getWindowTitle();
+public:
 	static std::vector<const char*> args;
 	bool prepared = false;
 	uint32_t width = 1280;
@@ -111,13 +111,13 @@ public:
 	bool paused = false;
 
 	struct Settings {
-		bool validation = false;
+		bool validation = true;
 		bool fullscreen = false;
 		bool vsync = false;
 		bool multiSampling = false;
 		VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_4_BIT;
 	} settings;
-	
+
 	struct DepthStencil {
 		VkImage image;
 		VkDeviceMemory mem;
@@ -135,7 +135,7 @@ public:
 		bool middle = false;
 	} mouseButtons;
 
-	// OS specific 
+	// OS specific
 #if defined(_WIN32)
 	HWND window;
 	HINSTANCE windowInstance;
