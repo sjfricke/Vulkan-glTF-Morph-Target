@@ -244,7 +244,7 @@ public:
 #endif
 		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
-//		models.cube.loadFromFile(assetpath + "models/twoCube/twoCube.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/twoCube/twoCubeLinear.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/twoCubeMorph/twoCubeMorph.gltf", vulkanDevice, queue);
 
 
@@ -581,6 +581,9 @@ public:
 		VulkanExampleBase::submitFrame();
 		VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 		if (!paused) {
+			// This is my implemenation of doing the animation loop
+			// Very naive approuch, but gets the job done, would like to clean up in future TODO
+
 //			test++; if (test % 500 == 0) { test = 0; std::cout << getWindowTitle() << std::endl; } // print out FPS
 
 			// need shared reset since curretTime is per model
@@ -628,6 +631,7 @@ public:
 									float weightDiff = mesh.weightsData[(mesh.currentIndex + 1) * mesh.weightsInit.size() + i] - mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
 									mesh.morphPushConst.weights[i] = (mixRate * weightDiff) + mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
 								}
+//								std::cout << "weights[0]: " << mesh.morphPushConst.weights[0] << std::endl;
 								break;
 							}
 							// if at end then drop to STEP and set last index weights
@@ -639,7 +643,18 @@ public:
 							}
 							break;
 						case vkglTF::Mesh::CUBICSPLINE:
-							// TODO
+							// TODO correctly implement... putting linear until then
+							if (mesh.currentIndex < mesh.weightsTime.size() - 1) {
+
+								float mixRate = (models.cube.currentTime - mesh.weightsTime[mesh.currentIndex]) /
+									(mesh.weightsTime[mesh.currentIndex + 1] - mesh.weightsTime[mesh.currentIndex]);
+
+								for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+									float weightDiff = mesh.weightsData[(mesh.currentIndex+1) * mesh.weightsInit.size() * 3 + mesh.weightsInit.size() + i] - mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() * 3 + mesh.weightsInit.size() + i];
+									mesh.morphPushConst.weights[i] = (mixRate * weightDiff) + mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() * 3 + mesh.weightsInit.size() + i];
+								}
+								break;
+							}
 							break;
 						default: std::cout << "Non supported interpolation" << std::endl;
 					}

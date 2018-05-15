@@ -415,20 +415,24 @@ namespace vkglTF
 			if (node.scale.size() == 3) {
 				scale = glm::make_vec3(node.scale.data());
 			}
-			glm::mat4 localNodeMatrix = glm::mat4(1.0f);
+			glm::mat4 localNodeTRSMatrix;
+			glm::mat4 localNodeRSMatrix; // need only rotate/scale for morph changes
 			if (node.matrix.size() == 16) {
-				localNodeMatrix = glm::make_mat4x4(node.matrix.data());
+				localNodeTRSMatrix = glm::make_mat4x4(node.matrix.data());
+				localNodeRSMatrix = glm::make_mat4x4(node.matrix.data());
 			} else {
 				// T * R * S
-				localNodeMatrix = glm::translate(glm::mat4(1.0f), translation) * rotation * glm::scale(glm::mat4(1.0f), scale);
+				localNodeTRSMatrix = glm::translate(glm::mat4(1.0f), translation) * rotation * glm::scale(glm::mat4(1.0f), scale);
+				localNodeRSMatrix = glm::mat4(1.0f) * rotation * glm::scale(glm::mat4(1.0f), scale);
 			}
-			localNodeMatrix = parentMatrix * localNodeMatrix;
+			localNodeTRSMatrix = parentMatrix * localNodeTRSMatrix;
+			// TODO send in RS Matrix from Parent
 
 			// Parent node with children
 			// TODO support children testing
 			if (node.children.size() > 0) {
 				for (auto i = 0; i < node.children.size(); i++) {
-					loadNode(model.nodes[node.children[i]], node.children[i], localNodeMatrix, model, indexBuffer, vertexBuffer, globalscale);
+					loadNode(model.nodes[node.children[i]], node.children[i], localNodeTRSMatrix, model, indexBuffer, vertexBuffer, globalscale);
 				}
 			}
 
@@ -456,7 +460,7 @@ namespace vkglTF
 								pMesh.interpolation = Mesh::STEP;
 							} else if (animation.samplers[pMesh.sampler].interpolation == "CUBICSPLINE") {
 								pMesh.interpolation = Mesh::CUBICSPLINE;
-							} else { // LINEAR as default incase glTF file is invalid
+							} else { // LINEAR as default from glTF spec
 								pMesh.interpolation = Mesh::LINEAR;
 							}
 
@@ -482,7 +486,7 @@ namespace vkglTF
 				// Also trying to avoid C memcpy for safty and true C++ container use
 				for (size_t i = 0; i < pMesh.weightsTime.size(); i++) {
 					pMesh.weightsTime[i] = weightTimeBuffer[i];
-//					std::cout << "weightsTime: " << pMesh.weightsTime[i] << std::endl;
+//					std::cout << "weightsTime[" << i << "] == " << pMesh.weightsTime[i] << std::endl;
 				}
 
 				// looking for animation time in whole model
@@ -496,7 +500,7 @@ namespace vkglTF
 
 				for (size_t i = 0; i < pMesh.weightsData.size(); i++) {
 					pMesh.weightsData[i] = weightDataBuffer[i];
-//					std::cout << "weightsData: " << pMesh.weightsData[i] << std::endl;
+//					std::cout << "weightsData[" << i << "] == " << pMesh.weightsData[i] << std::endl;
 				}
 
 
@@ -588,7 +592,7 @@ namespace vkglTF
 						for (size_t i = 0; i < morphVertexCount; i++) {
 							// Position data inserted first
 							for (size_t j = 0; j <  morphBuffer.size(); j++) {
-								glm::vec3 temp = localNodeMatrix * glm::vec4(glm::make_vec3(&(morphBuffer[j])[i * 3]), 1.0f);
+								glm::vec3 temp = localNodeRSMatrix * glm::vec4(glm::make_vec3(&(morphBuffer[j])[i * 3]), 1.0f);
 
 								if (j < pMesh.morphPushConst.normalOffset) {
 									// only position get global scaled up
@@ -607,11 +611,11 @@ namespace vkglTF
 
 					for (size_t v = 0; v < posAccessor.count; v++) {
 						Vertex vert{};
-						vert.pos = localNodeMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
+						vert.pos = localNodeTRSMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
 						vert.pos *= globalscale;
 
 						// glm::normalize() causes "nan" TODO figure that out
-						vert.normal = glm::normalize(glm::mat3(localNodeMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
+						vert.normal = glm::normalize(glm::mat3(localNodeTRSMatrix) * glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * 3]) : glm::vec3(0.0f)));
 
 						//vert.uv = bufferTexCoords ? glm::make_vec2(&bufferTexCoords[v * 2]) : glm::vec3(0.0f);
 						vert.tangent = glm::vec3(0.0f);
@@ -743,7 +747,7 @@ namespace vkglTF
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
 					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
-					loadNode(node, i,  glm::mat4(1.0f), gltfModel, indexBuffer, vertexBuffer, scale);
+					loadNode(node, scene.nodes[i],  glm::mat4(1.0f), gltfModel, indexBuffer, vertexBuffer, scale);
 				}
 			}
 			else {
