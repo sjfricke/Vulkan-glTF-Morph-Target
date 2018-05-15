@@ -5,18 +5,19 @@
 This was made to be a proof of concepts for people to reference when hacking at their own project. **CURRENTLY JUST A BASIC IMPLEMENTATION** as there are many more part I am *activly* working on atm. **PLEASE** feel free to drop issues or PR!
 
 - [x] Loads in glTF 2.0 Morph Target files
-- [x] Dynamic shaders via SSBO and Specializatio Constant
+- [x] Dynamic shaders via SSBO and Push Constants
 - [x] Specular based lighting
-- [ ] Get more testing models
-- [ ] Interpolation of timing (currently only use index in file linearly)
-- [ ] Create pipeline per mesh to allow multiple models
+- [x] Get more testing models
+- [x] Interpolation of timing - LINEAR, STEP
+- [ ] CUBICSPLINE Interpolations
+- [ ] Allow loading of multiple models
 - [ ] Allow glTF with more then 1 mesh
 - [ ] Allow glTF with more then 1 primative
 - [ ] Allow glTF with child nodes
 - [ ] UV Texture
 - [ ] Materials
 - [ ] Use tangents in morph
-- [ ] Be able to load non-morph target examples with this demo (some hardcode)
+- [ ] Be able to load non-morph target examples with this demo
 
 ## Credit
 
@@ -28,7 +29,7 @@ For info how to read in morph targets from a glTF file check out the great two t
 
 ## glTF 2.0 Model loading
 
-Model loading and rendering is implemented in the [vkglTF::Model](./base/VulkanglTFModel.hpp) class and uses the [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files. 
+Model loading and rendering is implemented in the [vkglTF::Model](./base/VulkanglTFModel.hpp) class and uses the [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files.
 
 Note that this is not a full glTF model class implementation, this was to show the steps for morph target rendering/parsing.
 
@@ -42,7 +43,7 @@ All the `"targets"` bufferViews are found and then all the morph target data is 
  vec3[] = {POS_0, POS_1, NORMAL_0, NORMAL_1, TANGENT_0, TANGENT_1}
 ```
 
-All the weights are passed in via Push Constants witha max of 8 right now, can be adjusted in `morph.vert` and in `pushConstantRange.size`.
+All the weights and offset are passed in via Push Constants witha max of 8 right now, can be adjusted in `morph.vert` and in `pushConstantRange.size`.
 
 ## Cloning
 

@@ -242,9 +242,9 @@ public:
 			exit(-1);
 		}
 #endif
-//		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
+		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
-		models.cube.loadFromFile(assetpath + "models/twoCube/twoCube.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/twoCube/twoCube.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/twoCubeMorph/twoCubeMorph.gltf", vulkanDevice, queue);
 
 
@@ -308,7 +308,6 @@ public:
 
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
 		}
-
 	}
 
 	void preparePipelines()
@@ -582,48 +581,76 @@ public:
 		VulkanExampleBase::submitFrame();
 		VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 		if (!paused) {
-//			test++;
-//			if (test % 500 == 0) {
-//				test = 0;
-//				std::cout << getWindowTitle() << std::endl;
-//			}
+//			test++; if (test % 500 == 0) { test = 0; std::cout << getWindowTitle() << std::endl; } // print out FPS
 
-			// TODO support actual interpolation between frames
+			// need shared reset since curretTime is per model
+			bool reset = false;
+
 			for (auto& mesh: models.cube.meshes) {
 				if (!mesh.isMorphTarget) { continue; }
 
-				// add to currentTimer, check if meets next animation keyframe, set pushConstant weights
-				mesh.currentTime += frameTimer;
-				if (mesh.currentTime > mesh.weightsTime[mesh.currentIndex + 1]) {
-					mesh.currentIndex++;
+				models.cube.currentTime += frameTimer;
 
-					// check if currentIndex needs to be reset or can skipped index
-					while(true) {
-						if (mesh.currentIndex >= mesh.weightsTime.size()) {
-							mesh.currentIndex = 0;
-							mesh.currentTime = 0.0f;
-							break;
+				// check to reset loop
+				if (models.cube.currentTime > models.cube.animationMaxTime) {
+					mesh.currentIndex = 0;
+					reset = true;
+
+					// reset all weight data
+					for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+						mesh.morphPushConst.weights[i] = mesh.weightsInit[i];
+					}
+
+				} else {
+
+					// check where currentIndex is at
+					while (true) {
+						if (mesh.currentIndex == mesh.weightsTime.size() - 1) {
+							break; // at end
 						}
 
-						if (mesh.currentTime > mesh.weightsTime[mesh.currentIndex + 1]) {
+						if (models.cube.currentTime > mesh.weightsTime[mesh.currentIndex + 1]) {
 							mesh.currentIndex++;
 						} else {
 							break;
 						}
 					}
 
-					// update all weight data
-					for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
-						mesh.morphPushConst.weights[i] = mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
-//						std::cout << "weights[" << i << "] = " << mesh.morphPushConst.weights[i] << "  --  ";
+					switch (mesh.interpolation) {
+						// TODO clean up LINEAR math style to be readable
+						case vkglTF::Mesh::LINEAR:
+							if (mesh.currentIndex < mesh.weightsTime.size() - 1) {
+
+								float mixRate = (models.cube.currentTime - mesh.weightsTime[mesh.currentIndex]) /
+									(mesh.weightsTime[mesh.currentIndex + 1] - mesh.weightsTime[mesh.currentIndex]);
+
+								for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+									float weightDiff = mesh.weightsData[(mesh.currentIndex + 1) * mesh.weightsInit.size() + i] - mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+									mesh.morphPushConst.weights[i] = (mixRate * weightDiff) + mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+								}
+								break;
+							}
+							// if at end then drop to STEP and set last index weights
+						case vkglTF::Mesh::STEP:
+							// sets weight to currentIndex only when step is reached
+							for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+								mesh.morphPushConst.weights[i] =
+									mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+							}
+							break;
+						case vkglTF::Mesh::CUBICSPLINE:
+							// TODO
+							break;
+						default: std::cout << "Non supported interpolation" << std::endl;
 					}
-					std::cout << std::endl;
+				}
+			} // for(mesh)
 
-					reBuildCommandBuffers();
-
-				} // else same weights as last frame
+			if (reset) {
+				models.cube.currentTime = 0.0f;
 			}
-		}
+			reBuildCommandBuffers();
+		} // if(!paused)
 	}
 
 	virtual void viewChanged()

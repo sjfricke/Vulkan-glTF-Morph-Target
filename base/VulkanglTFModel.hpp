@@ -352,9 +352,7 @@ namespace vkglTF
 
 		std::vector<Primitive> primitives;
 
-		// for keeping state of animation
-		float currentTime = 0.0f;
-
+		// for keeping state of mesh's animation
 		uint32_t currentIndex = 0;
 	};
 
@@ -386,6 +384,8 @@ namespace vkglTF
 
 		// In order [POS_0, POS_1... NORMAL_0, NORMAL_1... TANGENT_0, TANGENT_1..]
 		std::vector<float> morphVertexData; // TODO clear after device transfer
+		float animationMaxTime = 0.0f;
+		float currentTime = 0.0f;
 
 		void destroy(VkDevice device)
 		{
@@ -485,6 +485,9 @@ namespace vkglTF
 //					std::cout << "weightsTime: " << pMesh.weightsTime[i] << std::endl;
 				}
 
+				// looking for animation time in whole model
+				animationMaxTime = std::max(animationMaxTime, pMesh.weightsTime.back());
+
 				// now the output (weight data)
 				const tinygltf::Accessor &outputAccessor = model.accessors[pMesh.output];
 				const tinygltf::BufferView &outputView = model.bufferViews[outputAccessor.bufferView];
@@ -495,6 +498,8 @@ namespace vkglTF
 					pMesh.weightsData[i] = weightDataBuffer[i];
 //					std::cout << "weightsData: " << pMesh.weightsData[i] << std::endl;
 				}
+
+
 			} else {
 				// Non-morph targets
 
