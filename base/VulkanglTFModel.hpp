@@ -482,6 +482,7 @@ namespace vkglTF
 				// Also trying to avoid C memcpy for safty and true C++ container use
 				for (size_t i = 0; i < pMesh.weightsTime.size(); i++) {
 					pMesh.weightsTime[i] = weightTimeBuffer[i];
+//					std::cout << "weightsTime: " << pMesh.weightsTime[i] << std::endl;
 				}
 
 				// now the output (weight data)
@@ -492,7 +493,16 @@ namespace vkglTF
 
 				for (size_t i = 0; i < pMesh.weightsData.size(); i++) {
 					pMesh.weightsData[i] = weightDataBuffer[i];
+//					std::cout << "weightsData: " << pMesh.weightsData[i] << std::endl;
 				}
+			} else {
+				// Non-morph targets
+
+				// zero out push constants for shaders to skip over
+				pMesh.morphPushConst.bufferOffset = 0;
+				pMesh.morphPushConst.normalOffset = 0;
+				pMesh.morphPushConst.tangentOffset = 0;
+				pMesh.morphPushConst.vertexStride = 0;
 			}
 
 			for (auto& primitive : mesh.primitives) {
@@ -737,6 +747,7 @@ namespace vkglTF
 				return;
 			}
 
+
 			size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
 			size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
 			indices.count = static_cast<uint32_t>(indexBuffer.size());
@@ -801,11 +812,12 @@ namespace vkglTF
 			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
 		}
 
-		void draw(VkCommandBuffer commandBuffer)
+		void draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
 		{
 			// TODO this won't work with a multi-mesh object pretty sure
 			for (auto mesh : meshes) {
 				const VkDeviceSize offsets[1] = {0};
+				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkglTF::Mesh::morphPushConst), &mesh.morphPushConst);
 				vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
 				vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 				for (auto primitive : mesh.primitives) {

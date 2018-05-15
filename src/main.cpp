@@ -113,10 +113,14 @@ public:
 		glm::vec4 camera;
 	} uboMatrices;
 
-	VkPipelineLayout pipelineLayout;
+	struct PipelineLayouts {
+		VkPipelineLayout morph;
+		VkPipelineLayout normal;
+	} pipelineLayouts;
 
 	struct Pipelines {
-		VkPipeline loader;
+		VkPipeline morph;
+		VkPipeline normal;
 	} pipelines;
 
 	struct DescriptorSetLayouts {
@@ -142,9 +146,11 @@ public:
 
 	~VulkanExample()
 	{
-		vkDestroyPipeline(device, pipelines.loader, nullptr);
+		vkDestroyPipeline(device, pipelines.morph, nullptr);
+		vkDestroyPipeline(device, pipelines.normal, nullptr);
 
-		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+		vkDestroyPipelineLayout(device, pipelineLayouts.morph, nullptr);
+		vkDestroyPipelineLayout(device, pipelineLayouts.normal, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.loader, nullptr);
 
 		models.cube.destroy(device);
@@ -210,10 +216,10 @@ public:
 
 			VkDeviceSize offsets[1] = { 0 };
 
-			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.loader, 0, NULL);
-			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkglTF::Mesh::morphPushConst), &models.cube.meshes[0].morphPushConst);
-			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.loader);
-			models.cube.draw(drawCmdBuffers[i]);
+			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.morph, 0, 1, &descriptorSets.loader, 0, NULL);
+			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.morph);
+//			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayouts.morph, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkglTF::Mesh::morphPushConst), &models.cube.meshes[0].morphPushConst);
+			models.cube.draw(drawCmdBuffers[i], pipelineLayouts.morph);
 
 			vkCmdEndRenderPass(drawCmdBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
@@ -236,9 +242,9 @@ public:
 			exit(-1);
 		}
 #endif
-		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
-//		models.cube.loadFromFile(assetpath + "models/test/BoomBox/glTF/BoomBox.gltf", vulkanDevice, queue);
+		models.cube.loadFromFile(assetpath + "models/twoCube/twoCube.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/twoCubeMorph/twoCubeMorph.gltf", vulkanDevice, queue);
 
 
@@ -362,17 +368,23 @@ public:
 		// Pipeline layout
 		std::array<VkDescriptorSetLayout, 1> setLayouts = { descriptorSetLayouts.loader };
 
-		VkPipelineLayoutCreateInfo pipelineLayoutCI{};
-		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutCI.setLayoutCount = 1;
-		pipelineLayoutCI.pSetLayouts = setLayouts.data();
 		VkPushConstantRange pushConstantRange{};
 		pushConstantRange.size = sizeof(vkglTF::Mesh::morphPushConst);
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+		VkPipelineLayoutCreateInfo pipelineLayoutCI{};
+		pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		pipelineLayoutCI.pSetLayouts = setLayouts.data();
+		pipelineLayoutCI.setLayoutCount = 1;
 		pipelineLayoutCI.pushConstantRangeCount = 1;
 		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
 
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayouts.morph));
+
+		pipelineLayoutCI.pushConstantRangeCount = 0;
+		pipelineLayoutCI.pPushConstantRanges = nullptr;
+
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayouts.normal));
 
 		// Vertex bindings an attributes
 		VkVertexInputBindingDescription vertexInputBinding = { 0, sizeof(vkglTF::Model::Vertex), VK_VERTEX_INPUT_RATE_VERTEX };
@@ -394,7 +406,7 @@ public:
 
 		VkGraphicsPipelineCreateInfo pipelineCI{};
 		pipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineCI.layout = pipelineLayout;
+		pipelineCI.layout = pipelineLayouts.morph;
 		pipelineCI.renderPass = renderPass;
 		pipelineCI.pInputAssemblyState = &inputAssemblyStateCI;
 		pipelineCI.pVertexInputState = &vertexInputStateCI;
@@ -407,14 +419,26 @@ public:
 		pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
 		pipelineCI.pStages = shaderStages.data();
 
-		// Skybox pipeline (background cube)
+		// Morph Mesh pipeline
 		rasterizationStateCI.cullMode = VK_CULL_MODE_FRONT_BIT;
 		shaderStages = {
 			loadShader(device, "morph.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
 			loadShader(device, "morph.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 		};
 
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.loader));
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.morph));
+		for (auto shaderStage : shaderStages) {
+			vkDestroyShaderModule(device, shaderStage.module, nullptr);
+		}
+
+		// Normal Mesh pipeline
+		pipelineCI.layout = pipelineLayouts.normal;
+		shaderStages = {
+			loadShader(device, "normal.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+			loadShader(device, "morph.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
+		};
+
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.normal));
 		for (auto shaderStage : shaderStages) {
 			vkDestroyShaderModule(device, shaderStage.module, nullptr);
 		}
@@ -591,7 +615,9 @@ public:
 					// update all weight data
 					for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
 						mesh.morphPushConst.weights[i] = mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+//						std::cout << "weights[" << i << "] = " << mesh.morphPushConst.weights[i] << "  --  ";
 					}
+					std::cout << std::endl;
 
 					reBuildCommandBuffers();
 
