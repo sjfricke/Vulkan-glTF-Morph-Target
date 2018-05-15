@@ -30,8 +30,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "tiny_gltf.h"
 
-#define MAX_WEIGHTS 8
-
 /*
 	Utility functions
 */
@@ -131,15 +129,6 @@ public:
 
 	glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
 
-	// TODO, per mesh, not global
-	struct {
-		uint32_t bufferOffset;
-		uint32_t normalOffset;
-		uint32_t tangentOffset;
-		uint32_t vertexStride;
-		float    weights[MAX_WEIGHTS];
-	} morphPushConst;
-
 	VulkanExample() : VulkanExampleBase()
 	{
 		title = "Vulkan glTf 2.0 Morph Target";
@@ -222,7 +211,7 @@ public:
 			VkDeviceSize offsets[1] = { 0 };
 
 			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets.loader, 0, NULL);
-			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(morphPushConst), &morphPushConst);
+			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkglTF::Mesh::morphPushConst), &models.cube.meshes[0].morphPushConst);
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.loader);
 			models.cube.draw(drawCmdBuffers[i]);
 
@@ -378,7 +367,7 @@ public:
 		pipelineLayoutCI.setLayoutCount = 1;
 		pipelineLayoutCI.pSetLayouts = setLayouts.data();
 		VkPushConstantRange pushConstantRange{};
-		pushConstantRange.size = sizeof(morphPushConst);
+		pushConstantRange.size = sizeof(vkglTF::Mesh::morphPushConst);
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		pipelineLayoutCI.pushConstantRangeCount = 1;
 		pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
@@ -425,11 +414,6 @@ public:
 			loadShader(device, "morph.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 		};
 
-		morphPushConst.bufferOffset = 0;
-		morphPushConst.normalOffset = models.cube.meshes[0].primitives[0].normalOffset;
-		morphPushConst.tangentOffset = models.cube.meshes[0].primitives[0].tangentOffset;
-		morphPushConst.vertexStride = models.cube.meshes[0].primitives[0].morphVertexStride;
-
 		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipelines.loader));
 		for (auto shaderStage : shaderStages) {
 			vkDestroyShaderModule(device, shaderStage.module, nullptr);
@@ -465,7 +449,7 @@ public:
 	{
 		VkBuffer stageBuffer;
 		VkDeviceMemory stageMemory;
-		uint32_t stagingSize = static_cast<uint32_t>(models.cube.meshes[0].primitives[0].morphVertexData.size() * sizeof(float));
+		uint32_t stagingSize = static_cast<uint32_t>(models.cube.morphVertexData.size() * sizeof(float));
 
 		VK_CHECK_RESULT(vulkanDevice->createBuffer(
 			VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -473,7 +457,7 @@ public:
 			stagingSize,
 			&stageBuffer,
 			&stageMemory,
-		    models.cube.meshes[0].primitives[0].morphVertexData.data() ));
+		    models.cube.morphVertexData.data() ));
 
 		VK_CHECK_RESULT(vulkanDevice->createBuffer(
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -605,8 +589,8 @@ public:
 					}
 
 					// update all weight data
-					for (size_t i = 0; i < mesh.weightsInit.size() && i < MAX_WEIGHTS; i++) {
-						morphPushConst.weights[i] = mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+					for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+						mesh.morphPushConst.weights[i] = mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
 					}
 
 					reBuildCommandBuffers();

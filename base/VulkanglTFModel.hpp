@@ -29,6 +29,8 @@
 #include <android/asset_manager.h>
 #endif
 
+#define MAX_WEIGHTS 8
+
 namespace vkglTF
 {
 	/*
@@ -323,12 +325,14 @@ namespace vkglTF
 		uint32_t firstIndex;
 		uint32_t indexCount;
 		Material &material;
+	};
 
-		// In order [POS_0, POS_1... NORMAL_0, NORMAL_1... TANGENT_0, TANGENT_1..]
-		std::vector<float> morphVertexData; // TODO clear after device transfer
-		uint32_t morphVertexStride;
-		uint32_t normalOffset;  // where in morphVertexData it starts
-		uint32_t tangentOffset; // where in morphVertexData it starts
+	struct MorphPushConst{
+		uint32_t bufferOffset;
+		uint32_t normalOffset;
+		uint32_t tangentOffset;
+		uint32_t vertexStride;
+		float    weights[MAX_WEIGHTS];
 	};
 
 	/*
@@ -344,10 +348,13 @@ namespace vkglTF
 		std::vector<float> weightsInit;
 		std::vector<float> weightsTime;
 		std::vector<float> weightsData;
+		MorphPushConst morphPushConst;
+
 		std::vector<Primitive> primitives;
 
 		// for keeping state of animation
 		float currentTime = 0.0f;
+
 		uint32_t currentIndex = 0;
 	};
 
@@ -376,6 +383,9 @@ namespace vkglTF
 		std::vector<Mesh> meshes;
 		std::vector<Texture> textures;
 		std::vector<Material> materials;
+
+		// In order [POS_0, POS_1... NORMAL_0, NORMAL_1... TANGENT_0, TANGENT_1..]
+		std::vector<float> morphVertexData; // TODO clear after device transfer
 
 		void destroy(VkDevice device)
 		{
@@ -458,7 +468,7 @@ namespace vkglTF
 				}
 
 				// set init weights of mesh
-				for (size_t i = 0; i < mesh.weights.size(); i++) {
+				for (size_t i = 0; i < mesh.weights.size() && i < MAX_WEIGHTS; i++) {
 					pMesh.weightsInit.push_back(static_cast<float>(mesh.weights[i]));
 				}
 
@@ -536,8 +546,8 @@ namespace vkglTF
 								morphVertexCount = posWeightAccessor.count; // TODO https://github.com/KhronosGroup/glTF/issues/1339
 							}
 						}
-						pPrimitive.normalOffset = static_cast<uint8_t>(morphBuffer.size());
 
+						pMesh.morphPushConst.normalOffset = static_cast<uint32_t>(morphBuffer.size());
 						for (size_t t = 0; t < primitive.targets.size(); t++) {
 							if(primitive.targets[t].find("NORMAL") != primitive.targets[t].end()) {
 								const tinygltf::Accessor &normalWeightAccessor = model.accessors[primitive.targets[t].find("NORMAL")->second];
@@ -545,8 +555,8 @@ namespace vkglTF
 								morphBuffer.push_back(reinterpret_cast<const float*>(&(model.buffers[normalWeightView.buffer].data[normalWeightAccessor.byteOffset + normalWeightView.byteOffset])));
 							}
 						}
-						pPrimitive.tangentOffset = static_cast<uint8_t>(morphBuffer.size());
 
+						pMesh.morphPushConst.tangentOffset = static_cast<uint32_t>(morphBuffer.size());
 						for (size_t t = 0; t < primitive.targets.size(); t++) {
 							if(primitive.targets[t].find("TANGENT") != primitive.targets[t].end()) {
 								const tinygltf::Accessor &tangentWeightAccessor = model.accessors[primitive.targets[t].find("TANGENT")->second];
@@ -555,7 +565,9 @@ namespace vkglTF
 							}
 						}
 
-						pPrimitive.morphVertexStride = morphBuffer.size();
+						pMesh.morphPushConst.vertexStride = static_cast<uint32_t>(morphBuffer.size());
+						pMesh.morphPushConst.bufferOffset = static_cast<uint32_t>(morphVertexData.size());
+
 						// Pack data in VAO style
 						// Can assume all vec3 from spec
 						for (size_t i = 0; i < morphVertexCount; i++) {
@@ -563,7 +575,7 @@ namespace vkglTF
 							for (size_t j = 0; j <  morphBuffer.size(); j++) {
 								glm::vec3 temp = localNodeMatrix * glm::vec4(glm::make_vec3(&(morphBuffer[j])[i * 3]), 1.0f);
 
-								if (j < pPrimitive.normalOffset) {
+								if (j < pMesh.morphPushConst.normalOffset) {
 									// only position get global scaled up
 									temp *= globalscale;
 								} else if (temp.x != 0 || temp.y != 0 ||  temp.z != 0) { // glm::normalize() causes "nan" TODO figure that out
@@ -571,9 +583,9 @@ namespace vkglTF
 									temp = glm::normalize(temp);
 								}
 								temp.y *= -1.0f;
-								pPrimitive.morphVertexData.push_back(temp.x);
-								pPrimitive.morphVertexData.push_back(temp.y);
-								pPrimitive.morphVertexData.push_back(temp.z);
+								morphVertexData.push_back(temp.x);
+								morphVertexData.push_back(temp.y);
+								morphVertexData.push_back(temp.z);
 							}
 						}
 					}
