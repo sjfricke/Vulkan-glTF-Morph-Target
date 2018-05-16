@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <vector>
 #include <chrono>
+#include <ratio>
 
 #include <vulkan/vulkan.h>
 #include "VulkanExampleBase.h"
@@ -557,6 +558,9 @@ public:
 		buildCommandBuffers();
 
 		prepared = true;
+
+		// start timer for animation
+		tAnimation = std::chrono::high_resolution_clock::now();
 	}
 
 	virtual void render()
@@ -586,13 +590,18 @@ public:
 
 //			test++; if (test % 500 == 0) { test = 0; std::cout << getWindowTitle() << std::endl; } // print out FPS
 
+			// Update all the models animation timers
+			auto tDiff = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - tAnimation).count() / 1000.0f;
+			tAnimation = std::chrono::high_resolution_clock::now();
+			models.cube.currentTime += tDiff;
+
 			// need shared reset since curretTime is per model
 			bool reset = false;
 
 			for (auto& mesh: models.cube.meshes) {
 				if (!mesh.isMorphTarget) { continue; }
 
-				models.cube.currentTime += frameTimer;
+
 
 				// check to reset loop
 				if (models.cube.currentTime > models.cube.animationMaxTime) {

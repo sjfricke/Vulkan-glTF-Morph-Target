@@ -107,6 +107,7 @@ public:
 	uint32_t height = 720;
 	float frameTimer = 1.0f;
 	Camera camera;
+	std::chrono::time_point<std::chrono::high_resolution_clock> tAnimation;
 	glm::vec2 mousePos;
 	bool paused = false;
 
