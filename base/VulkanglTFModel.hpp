@@ -370,15 +370,21 @@ namespace vkglTF
 		struct Vertices {
 			VkBuffer buffer;
 			VkDeviceMemory memory;
-		} vertices;
+		};
 
 		struct Indices {
 			uint32_t count;
 			VkBuffer buffer;
 			VkDeviceMemory memory;
-		} indices;
+		};
 
-		std::vector<Mesh> meshes;
+		Vertices verticesMorph;
+		Indices indicesMorph;
+		Vertices verticesNormal;
+		Indices indicesNormal;
+
+		std::vector<Mesh> meshesMorph;
+		std::vector<Mesh> meshesNormal;
 		std::vector<Texture> textures;
 		std::vector<Material> materials;
 
@@ -389,16 +395,23 @@ namespace vkglTF
 
 		void destroy(VkDevice device)
 		{
-			vkDestroyBuffer(device, vertices.buffer, nullptr);
-			vkFreeMemory(device, vertices.memory, nullptr);
-			vkDestroyBuffer(device, indices.buffer, nullptr);
-			vkFreeMemory(device, indices.memory, nullptr);
+			vkDestroyBuffer(device, verticesMorph.buffer, nullptr);
+			vkFreeMemory(device, verticesMorph.memory, nullptr);
+			vkDestroyBuffer(device, indicesMorph.buffer, nullptr);
+			vkFreeMemory(device, indicesMorph.memory, nullptr);
+			vkDestroyBuffer(device, verticesNormal.buffer, nullptr);
+			vkFreeMemory(device, verticesNormal.memory, nullptr);
+			vkDestroyBuffer(device, indicesNormal.buffer, nullptr);
+			vkFreeMemory(device, indicesNormal.memory, nullptr);
 			for (auto texture : textures) {
 				texture.destroy();
 			}
 		};
 
-		void loadNode(const tinygltf::Node &node, size_t nodeIndex, const glm::mat4 &parentMatrix, const tinygltf::Model &model, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
+		void loadNode(const tinygltf::Node &node, size_t nodeIndex, const glm::mat4 &parentMatrix, const tinygltf::Model &model,
+					  std::vector<Vertex>& vertexBufferMorph, std::vector<uint32_t>& indexBufferMorph,
+					  std::vector<Vertex>& vertexBufferNormal, std::vector<uint32_t >& indexBufferNormal,
+					  float globalscale)
 		{
 
 			// Generate local node matrix
@@ -432,7 +445,7 @@ namespace vkglTF
 			// TODO support children testing
 			if (node.children.size() > 0) {
 				for (auto i = 0; i < node.children.size(); i++) {
-					loadNode(model.nodes[node.children[i]], node.children[i], localNodeTRSMatrix, model, indexBuffer, vertexBuffer, globalscale);
+					loadNode(model.nodes[node.children[i]], node.children[i], localNodeTRSMatrix, model, vertexBufferMorph, indexBufferMorph, vertexBufferNormal, indexBufferNormal, globalscale);
 				}
 			}
 
@@ -442,13 +455,18 @@ namespace vkglTF
 
 			// Node contains mesh data
 			const tinygltf::Mesh mesh = model.meshes[node.mesh];
-			meshes.push_back(Mesh{});
-			Mesh &pMesh = meshes.back();
 
+			// determine if the mesh is morph or not
+			if (mesh.weights.empty()) {
+				meshesNormal.push_back(Mesh{}); // normal meshes
+			} else {
+				meshesMorph.push_back(Mesh{}); // morph meshes
+			}
+			Mesh &pMesh = (mesh.weights.empty()) ? meshesNormal.back() : meshesMorph.back();
 			pMesh.isMorphTarget = mesh.weights.empty() ? false : true;
 
 			if (pMesh.isMorphTarget) {
-				// find sampler to node's mesh
+				// find glTF sampler to node's mesh
 				bool foundSampler = false;
 				for (auto& animation : model.animations) {
 					for (auto& channel : animation.channels) {
@@ -486,7 +504,6 @@ namespace vkglTF
 				// Also trying to avoid C memcpy for safty and true C++ container use
 				for (size_t i = 0; i < pMesh.weightsTime.size(); i++) {
 					pMesh.weightsTime[i] = weightTimeBuffer[i];
-//					std::cout << "weightsTime[" << i << "] == " << pMesh.weightsTime[i] << std::endl;
 				}
 
 				// looking for animation time in whole model
@@ -500,9 +517,7 @@ namespace vkglTF
 
 				for (size_t i = 0; i < pMesh.weightsData.size(); i++) {
 					pMesh.weightsData[i] = weightDataBuffer[i];
-//					std::cout << "weightsData[" << i << "] == " << pMesh.weightsData[i] << std::endl;
 				}
-
 
 			} else {
 				// Non-morph targets
@@ -521,13 +536,14 @@ namespace vkglTF
 				}
 
 				pMesh.primitives.push_back(vkglTF::Primitive{
-					.firstIndex = static_cast<uint32_t>(indexBuffer.size()),
+					.firstIndex = (pMesh.isMorphTarget) ? static_cast<uint32_t>(indexBufferMorph.size()) : static_cast<uint32_t>(indexBufferNormal.size()),
 					.indexCount = 0,
 					.material = materials[primitive.material],
 				});
 				Primitive &pPrimitive = pMesh.primitives.back();
 
-				uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
+				uint32_t vertexStart = (pMesh.isMorphTarget) ? static_cast<uint32_t>(vertexBufferMorph.size()) : static_cast<uint32_t>(vertexBufferNormal.size());
+
 				// Vertices
 				{
 					const float *bufferPos = nullptr;
@@ -623,7 +639,12 @@ namespace vkglTF
 						// Vulkan coordinate system
 						vert.pos.y *= -1.0f;
 						vert.normal.y *= -1.0f;
-						vertexBuffer.push_back(vert);
+
+						if (pMesh.isMorphTarget) {
+							vertexBufferMorph.push_back(vert);
+						} else {
+							vertexBufferNormal.push_back(vert);
+						}
 					}
 				}
 
@@ -640,7 +661,11 @@ namespace vkglTF
 						uint32_t *buf = new uint32_t[accessor.count];
 						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint32_t));
 						for (size_t index = 0; index < accessor.count; index++) {
-							indexBuffer.push_back(buf[index] + vertexStart);
+							if (pMesh.isMorphTarget) {
+								indexBufferMorph.push_back(buf[index] + vertexStart);
+							} else {
+								indexBufferNormal.push_back(buf[index] + vertexStart);
+							}
 						}
 						break;
 					}
@@ -648,7 +673,11 @@ namespace vkglTF
 						uint16_t *buf = new uint16_t[accessor.count];
 						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint16_t));
 						for (size_t index = 0; index < accessor.count; index++) {
-							indexBuffer.push_back(buf[index] + vertexStart);
+							if (pMesh.isMorphTarget) {
+								indexBufferMorph.push_back(buf[index] + vertexStart);
+							} else {
+								indexBufferNormal.push_back(buf[index] + vertexStart);
+							}
 						}
 						break;
 					}
@@ -656,7 +685,11 @@ namespace vkglTF
 						uint8_t *buf = new uint8_t[accessor.count];
 						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint8_t));
 						for (size_t index = 0; index < accessor.count; index++) {
-							indexBuffer.push_back(buf[index] + vertexStart);
+							if (pMesh.isMorphTarget) {
+								indexBufferMorph.push_back(buf[index] + vertexStart);
+							} else {
+								indexBufferNormal.push_back(buf[index] + vertexStart);
+							}
 						}
 						break;
 					}
@@ -738,8 +771,11 @@ namespace vkglTF
 #else
 			bool fileLoaded = gltfContext.LoadASCIIFromFile(&gltfModel, &error, filename.c_str());
 #endif
-			std::vector<uint32_t> indexBuffer;
-			std::vector<Vertex> vertexBuffer;
+			// TODO better placement so not sending in 4 vectors to loadNode()
+			std::vector<Vertex> vertexBufferMorph;
+			std::vector<uint32_t> indexBufferMorph;
+			std::vector<Vertex> vertexBufferNormal;
+			std::vector<uint32_t> indexBufferNormal;
 
 			if (fileLoaded) {
 			//	loadImages(gltfModel, device, transferQueue);
@@ -747,7 +783,7 @@ namespace vkglTF
 				const tinygltf::Scene &scene = gltfModel.scenes[gltfModel.defaultScene];
 				for (size_t i = 0; i < scene.nodes.size(); i++) {
 					const tinygltf::Node node = gltfModel.nodes[scene.nodes[i]];
-					loadNode(node, scene.nodes[i],  glm::mat4(1.0f), gltfModel, indexBuffer, vertexBuffer, scale);
+					loadNode(node, scene.nodes[i],  glm::mat4(1.0f), gltfModel, vertexBufferMorph, indexBufferMorph, vertexBufferNormal, indexBufferNormal, scale);
 				}
 			}
 			else {
@@ -757,78 +793,152 @@ namespace vkglTF
 			}
 
 
-			size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
-			size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
-			indices.count = static_cast<uint32_t>(indexBuffer.size());
+			size_t vertexBufferSizeMorph = vertexBufferMorph.size() * sizeof(Vertex);
+			size_t indexBufferSizeMorph = indexBufferMorph.size() * sizeof(uint32_t);
+			indicesMorph.count = static_cast<uint32_t>(indexBufferMorph.size());
 
-			assert((vertexBufferSize > 0) && (indexBufferSize > 0));
+			size_t vertexBufferSizeNormal = vertexBufferNormal.size() * sizeof(Vertex);
+			size_t indexBufferSizeNormal = indexBufferNormal.size() * sizeof(uint32_t);
+			indicesNormal.count = static_cast<uint32_t>(indexBufferNormal.size());
 
 			struct StagingBuffer {
 				VkBuffer buffer;
 				VkDeviceMemory memory;
-			} vertexStaging, indexStaging;
+			} vertexStagingMorph, indexStagingMorph, vertexStagingNormal, indexStagingNormal;
 
-			// Create staging buffers
-			// Vertex data
-			VK_CHECK_RESULT(device->createBuffer(
-				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				vertexBufferSize,
-				&vertexStaging.buffer,
-				&vertexStaging.memory,
-				vertexBuffer.data()));
-			// Index data
-			VK_CHECK_RESULT(device->createBuffer(
-				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				indexBufferSize,
-				&indexStaging.buffer,
-				&indexStaging.memory,
-				indexBuffer.data()));
 
-			// Create device local buffers
-			// Vertex buffer
-			VK_CHECK_RESULT(device->createBuffer(
-				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-				vertexBufferSize,
-				&vertices.buffer,
-				&vertices.memory));
-			// Index buffer
-			VK_CHECK_RESULT(device->createBuffer(
-				VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-				indexBufferSize,
-				&indices.buffer,
-				&indices.memory));
+			// TODO this is ugly, but just for testing
+			if ((vertexBufferSizeMorph > 0) && (indexBufferSizeMorph > 0)) {
+				// Create staging buffers
+				// Vertex data Morph
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					vertexBufferSizeMorph,
+					&vertexStagingMorph.buffer,
+					&vertexStagingMorph.memory,
+					vertexBufferMorph.data()));
 
-			// Copy from staging buffers
-			VkCommandBuffer copyCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+				// Index data Morph
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					indexBufferSizeMorph,
+					&indexStagingMorph.buffer,
+					&indexStagingMorph.memory,
+					indexBufferMorph.data()));
 
-			VkBufferCopy copyRegion = {};
+				// Create device local buffers
+				// Vertex buffer Morph
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					vertexBufferSizeMorph,
+					&verticesMorph.buffer,
+					&verticesMorph.memory));
 
-			copyRegion.size = vertexBufferSize;
-			vkCmdCopyBuffer(copyCmd, vertexStaging.buffer, vertices.buffer, 1, &copyRegion);
+				// Index buffer Morph
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					indexBufferSizeMorph,
+					&indicesMorph.buffer,
+					&indicesMorph.memory))
 
-			copyRegion.size = indexBufferSize;
-			vkCmdCopyBuffer(copyCmd, indexStaging.buffer, indices.buffer, 1, &copyRegion);
+				// Copy from staging buffers
+				VkCommandBuffer copyCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
-			device->flushCommandBuffer(copyCmd, transferQueue, true);
+				VkBufferCopy copyRegion = {};
 
-			vkDestroyBuffer(device->logicalDevice, vertexStaging.buffer, nullptr);
-			vkFreeMemory(device->logicalDevice, vertexStaging.memory, nullptr);
-			vkDestroyBuffer(device->logicalDevice, indexStaging.buffer, nullptr);
-			vkFreeMemory(device->logicalDevice, indexStaging.memory, nullptr);
+				copyRegion.size = vertexBufferSizeMorph;
+				vkCmdCopyBuffer(copyCmd, vertexStagingMorph.buffer, verticesMorph.buffer, 1, &copyRegion);
+
+				copyRegion.size = indexBufferSizeMorph;
+				vkCmdCopyBuffer(copyCmd, indexStagingMorph.buffer, indicesMorph.buffer, 1, &copyRegion);
+
+				device->flushCommandBuffer(copyCmd, transferQueue, true); // TODO Need to free compyCmd?
+
+				vkDestroyBuffer(device->logicalDevice, vertexStagingMorph.buffer, nullptr);
+				vkFreeMemory(device->logicalDevice, vertexStagingMorph.memory, nullptr);
+				vkDestroyBuffer(device->logicalDevice, indexStagingMorph.buffer, nullptr);
+				vkFreeMemory(device->logicalDevice, indexStagingMorph.memory, nullptr);
+			}
+
+			// TODO have one buffer allocated and make Normal and Morph buffers adjacent
+			if ((vertexBufferSizeNormal > 0) && (indexBufferSizeNormal > 0)) {
+
+				// Vertex data Normal
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					vertexBufferSizeNormal,
+					&vertexStagingNormal.buffer,
+					&vertexStagingNormal.memory,
+					vertexBufferNormal.data()));
+
+				// Index data Normal
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					indexBufferSizeNormal,
+					&indexStagingNormal.buffer,
+					&indexStagingNormal.memory,
+					indexBufferNormal.data()));
+
+				// Vertex buffer Normal
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					vertexBufferSizeNormal,
+					&verticesNormal.buffer,
+					&verticesNormal.memory));
+
+				// Index buffer Normal
+				VK_CHECK_RESULT(device->createBuffer(
+					VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+					VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					indexBufferSizeNormal,
+					&indicesNormal.buffer,
+					&indicesNormal.memory));
+
+				// Normal copy
+				VkCommandBuffer copyCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+				VkBufferCopy copyRegion = {};
+
+				copyRegion.size = vertexBufferSizeNormal;
+				vkCmdCopyBuffer(copyCmd, vertexStagingNormal.buffer, verticesNormal.buffer, 1, &copyRegion);
+
+				copyRegion.size = indexBufferSizeNormal;
+				vkCmdCopyBuffer(copyCmd, indexStagingNormal.buffer, indicesNormal.buffer, 1, &copyRegion);
+
+				device->flushCommandBuffer(copyCmd, transferQueue, true);
+
+				vkDestroyBuffer(device->logicalDevice, vertexStagingNormal.buffer, nullptr);
+				vkFreeMemory(device->logicalDevice, vertexStagingNormal.memory, nullptr);
+				vkDestroyBuffer(device->logicalDevice, indexStagingNormal.buffer, nullptr);
+				vkFreeMemory(device->logicalDevice, indexStagingNormal.memory, nullptr);
+			}
 		}
 
 		void draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
 		{
-			// TODO this won't work with a multi-mesh object pretty sure
-			for (auto mesh : meshes) {
+			// TODO have a static and full draw call
+			for (auto mesh : meshesMorph) {
 				const VkDeviceSize offsets[1] = {0};
 				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkglTF::Mesh::morphPushConst), &mesh.morphPushConst);
-				vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
-				vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+				vkCmdBindVertexBuffers(commandBuffer, 0, 1, &verticesMorph.buffer, offsets);
+				vkCmdBindIndexBuffer(commandBuffer, indicesMorph.buffer, 0, VK_INDEX_TYPE_UINT32);
+				for (auto primitive : mesh.primitives) {
+					vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+				}
+			}
+
+			for (auto mesh : meshesNormal) {
+				const VkDeviceSize offsets[1] = {0};
+				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkglTF::Mesh::morphPushConst), &mesh.morphPushConst);
+				vkCmdBindVertexBuffers(commandBuffer, 0, 1, &verticesNormal.buffer, offsets);
+				vkCmdBindIndexBuffer(commandBuffer, indicesNormal.buffer, 0, VK_INDEX_TYPE_UINT32);
 				for (auto primitive : mesh.primitives) {
 					vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 				}

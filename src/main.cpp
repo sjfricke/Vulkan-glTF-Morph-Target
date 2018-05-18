@@ -219,7 +219,6 @@ public:
 
 			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.morph, 0, 1, &descriptorSets.loader, 0, NULL);
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.morph);
-//			vkCmdPushConstants(drawCmdBuffers[i], pipelineLayouts.morph, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkglTF::Mesh::morphPushConst), &models.cube.meshes[0].morphPushConst);
 			models.cube.draw(drawCmdBuffers[i], pipelineLayouts.morph);
 
 			vkCmdEndRenderPass(drawCmdBuffers[i]);
@@ -247,7 +246,7 @@ public:
 //		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/twoCube/twoCubeLinear.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/twoCubeMorph/twoCubeMorph.gltf", vulkanDevice, queue);
-
+//		models.cube.loadFromFile(assetpath + "models/threeCube/threeCube.gltf", vulkanDevice, queue);
 
 		// Need to wait until we get morph target data to build storage buffer for it
 		prepareStorageBuffers();
@@ -598,10 +597,7 @@ public:
 			// need shared reset since curretTime is per model
 			bool reset = false;
 
-			for (auto& mesh: models.cube.meshes) {
-				if (!mesh.isMorphTarget) { continue; }
-
-
+			for (auto& mesh: models.cube.meshesMorph) {
 
 				// check to reset loop
 				if (models.cube.currentTime > models.cube.animationMaxTime) {
@@ -628,6 +624,7 @@ public:
 						}
 					}
 
+					// TODO all glTF sampler inputs are linear, don't need to compute for non-linear methods
 					switch (mesh.interpolation) {
 						// TODO clean up LINEAR math style to be readable
 						case vkglTF::Mesh::LINEAR:
