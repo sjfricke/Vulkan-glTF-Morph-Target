@@ -921,7 +921,7 @@ namespace vkglTF
 			}
 		}
 
-		void draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
+		void drawMorph(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
 		{
 			// TODO have a static and full draw call
 			for (auto mesh : meshesMorph) {
@@ -933,10 +933,12 @@ namespace vkglTF
 					vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 				}
 			}
+		}
 
+		void drawNormal(VkCommandBuffer commandBuffer)
+		{
 			for (auto mesh : meshesNormal) {
 				const VkDeviceSize offsets[1] = {0};
-				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkglTF::Mesh::morphPushConst), &mesh.morphPushConst);
 				vkCmdBindVertexBuffers(commandBuffer, 0, 1, &verticesNormal.buffer, offsets);
 				vkCmdBindIndexBuffer(commandBuffer, indicesNormal.buffer, 0, VK_INDEX_TYPE_UINT32);
 				for (auto primitive : mesh.primitives) {

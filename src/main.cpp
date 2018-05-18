@@ -125,11 +125,13 @@ public:
 	} pipelines;
 
 	struct DescriptorSetLayouts {
-		VkDescriptorSetLayout loader;
+		VkDescriptorSetLayout morph;
+		VkDescriptorSetLayout normal;
 	} descriptorSetLayouts;
 
 	struct DescriptorSets {
-		VkDescriptorSet loader;
+		VkDescriptorSet morph;
+		VkDescriptorSet normal;
 	} descriptorSets;
 
 	glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -152,7 +154,8 @@ public:
 
 		vkDestroyPipelineLayout(device, pipelineLayouts.morph, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayouts.normal, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.loader, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.morph, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayouts.normal, nullptr);
 
 		models.cube.destroy(device);
 
@@ -217,9 +220,14 @@ public:
 
 			VkDeviceSize offsets[1] = { 0 };
 
-			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.morph, 0, 1, &descriptorSets.loader, 0, NULL);
+			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.morph, 0, 1, &descriptorSets.morph, 0, NULL);
 			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.morph);
-			models.cube.draw(drawCmdBuffers[i], pipelineLayouts.morph);
+			models.cube.drawMorph(drawCmdBuffers[i], pipelineLayouts.morph);
+
+			// TODO - profile if its faster to rebind diff pipeline/descriptor or both use morph's and have normal ignore the extra buffers and push const
+			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.normal, 0, 1, &descriptorSets.normal, 0, NULL);
+			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.normal);
+			models.cube.drawNormal(drawCmdBuffers[i]);
 
 			vkCmdEndRenderPass(drawCmdBuffers[i]);
 			VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
@@ -244,7 +252,6 @@ public:
 #endif
 		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
-//		models.cube.loadFromFile(assetpath + "models/twoCube/twoCubeLinear.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/twoCubeMorph/twoCubeMorph.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/threeCube/threeCube.gltf", vulkanDevice, queue);
 
@@ -258,14 +265,14 @@ public:
 			Descriptor Pool
 		*/
 		std::vector<VkDescriptorPoolSize> poolSizes = {
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 },
 			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 },
 		};
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		descriptorPoolCI.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 		descriptorPoolCI.pPoolSizes = poolSizes.data();
-		descriptorPoolCI.maxSets = 1;
+		descriptorPoolCI.maxSets = 2;
 		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCI, nullptr, &descriptorPool));
 
 		/*
@@ -281,30 +288,59 @@ public:
 			descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 			descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
 			descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.loader));
+			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.morph));
 
 			VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
 			descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 			descriptorSetAllocInfo.descriptorPool = descriptorPool;
-			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.loader;
+			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.morph;
 			descriptorSetAllocInfo.descriptorSetCount = 1;
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.loader));
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.morph));
 
 			std::vector<VkWriteDescriptorSet> writeDescriptorSets(2);
 
 			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 			writeDescriptorSets[0].descriptorCount = 1;
-			writeDescriptorSets[0].dstSet = descriptorSets.loader;
+			writeDescriptorSets[0].dstSet = descriptorSets.morph;
 			writeDescriptorSets[0].dstBinding = 0;
 			writeDescriptorSets[0].pBufferInfo = &uniformBuffers.cube.descriptor;
 
 			writeDescriptorSets[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			writeDescriptorSets[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 			writeDescriptorSets[1].descriptorCount = 1;
-			writeDescriptorSets[1].dstSet = descriptorSets.loader;
+			writeDescriptorSets[1].dstSet = descriptorSets.morph;
 			writeDescriptorSets[1].dstBinding = 1;
 			writeDescriptorSets[1].pBufferInfo = &uniformBuffers.morphTaret.descriptor;
+
+			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
+		}
+		{
+			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+				{ 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT , nullptr },
+			};
+
+			VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+			descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
+			descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.normal));
+
+			VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
+			descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			descriptorSetAllocInfo.descriptorPool = descriptorPool;
+			descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.normal;
+			descriptorSetAllocInfo.descriptorSetCount = 1;
+			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocInfo, &descriptorSets.normal));
+
+			std::vector<VkWriteDescriptorSet> writeDescriptorSets(1);
+
+			writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			writeDescriptorSets[0].descriptorCount = 1;
+			writeDescriptorSets[0].dstSet = descriptorSets.normal;
+			writeDescriptorSets[0].dstBinding = 0;
+			writeDescriptorSets[0].pBufferInfo = &uniformBuffers.cube.descriptor;
 
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
 		}
@@ -365,7 +401,8 @@ public:
 		dynamicStateCI.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnables.size());
 
 		// Pipeline layout
-		std::array<VkDescriptorSetLayout, 1> setLayouts = { descriptorSetLayouts.loader };
+		std::array<VkDescriptorSetLayout, 1> setLayouts = { descriptorSetLayouts.morph };
+		std::array<VkDescriptorSetLayout, 1> setLayoutsNormal = { descriptorSetLayouts.normal };
 
 		VkPushConstantRange pushConstantRange{};
 		pushConstantRange.size = sizeof(vkglTF::Mesh::morphPushConst);
@@ -380,6 +417,7 @@ public:
 
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayouts.morph));
 
+		pipelineLayoutCI.pSetLayouts = setLayoutsNormal.data();
 		pipelineLayoutCI.pushConstantRangeCount = 0;
 		pipelineLayoutCI.pPushConstantRanges = nullptr;
 
