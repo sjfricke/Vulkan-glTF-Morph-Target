@@ -11,13 +11,13 @@ This was made to be a proof of concepts for people to reference when hacking at 
 - [x] Interpolation of timing - LINEAR, STEP
 - [ ] CUBICSPLINE Interpolations
 - [ ] Allow loading of multiple models
-- [ ] Allow glTF with more then 1 mesh
+- [x] Allow glTF with more then 1 morph mesh
+- [x] Allow glTF with more then 1 morph mesh and 1 non-morph mesh
 - [ ] Allow glTF with more then 1 primative
 - [ ] Allow glTF with child nodes
 - [ ] UV Texture
 - [ ] Materials
 - [ ] Use tangents in morph
-- [ ] Be able to load non-morph target examples with this demo
 
 ## Credit
 
@@ -27,11 +27,17 @@ For info how to read in morph targets from a glTF file check out the great two t
 - [Simple Morph Target](https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_017_SimpleMorphTarget.md)
 - [Morph Targets Example](https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_018_MorphTargets.md)
 
-## glTF 2.0 Model loading
+## How it works
+
+A future blog post will be up shortly with more details of how it works so you can implement it for your own use
+
+### glTF 2.0 Model loading
 
 Model loading and rendering is implemented in the [vkglTF::Model](./base/VulkanglTFModel.hpp) class and uses the [tiny glTF library](https://github.com/syoyo/tinygltf) to import the glTF 2.0 files.
 
 Note that this is not a full glTF model class implementation, this was to show the steps for morph target rendering/parsing.
+
+### The Morph data
 
 All the `"targets"` bufferViews are found and then all the morph target data is packed in a VAO style format to a storage buffer in ther vertex shader with position then normal then tangent
 
