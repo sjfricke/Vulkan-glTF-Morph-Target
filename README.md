@@ -1,8 +1,8 @@
 # Vulkan Morph Targets (Blend Shapes) using glTF 2.0 models
 
-![cube demo](screenshots/cubeDemo.gif)
+![four cube demo](screenshots/fourCubeDemo.gif)
 
-This was made to be a proof of concepts for people to reference when hacking at their own project. **CURRENTLY JUST A BASIC IMPLEMENTATION** as there are many more part I am *activly* working on atm. **PLEASE** feel free to drop issues or PR!
+This was made to be a proof of concepts for people to reference when hacking at their own project. While almost done, there are many more part I am *activly* working on atm. **PLEASE** feel free to drop issues or PR!
 
 - [x] Loads in glTF 2.0 Morph Target files
 - [x] Dynamic shaders via SSBO and Push Constants
@@ -18,6 +18,10 @@ This was made to be a proof of concepts for people to reference when hacking at 
 - [ ] Materials
 - [ ] Use tangents in morph
 
+## How it works
+
+A future blog post will be up shortly with more details of how it works so you can implement it for your own use
+
 ## Credit
 
 Most of the template is from [Sascha Willem's Vulkan-glTF-PBR demo](https://github.com/SaschaWillems/Vulkan-glTF-PBR) so huge shout out to him! I wanted to use morph targets for my own purpose, knew [glTF had it in its specification](https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#morph-targets) and decided to create a demo since no one else seems to have for Vulkan.
@@ -25,10 +29,6 @@ Most of the template is from [Sascha Willem's Vulkan-glTF-PBR demo](https://gith
 For info how to read in morph targets from a glTF file check out the great two tutorials from the KhronosGroup/glTF-Tutorials repo
 - [Simple Morph Target](https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_017_SimpleMorphTarget.md)
 - [Morph Targets Example](https://github.com/KhronosGroup/glTF-Tutorials/blob/master/gltfTutorial/gltfTutorial_018_MorphTargets.md)
-
-## How it works
-
-A future blog post will be up shortly with more details of how it works so you can implement it for your own use
 
 ### glTF 2.0 Model loading
 
