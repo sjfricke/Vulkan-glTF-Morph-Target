@@ -8,8 +8,7 @@ This was made to be a proof of concepts for people to reference when hacking at 
 - [x] Dynamic shaders via SSBO and Push Constants
 - [x] Specular based lighting
 - [x] Get more testing models
-- [x] Interpolation of timing - LINEAR, STEP
-- [ ] CUBICSPLINE Interpolations
+- [x] Interpolation of timing - LINEAR, STEP, CUBICSPLINE
 - [ ] Allow loading of multiple models
 - [x] Allow glTF with more then 1 morph mesh
 - [x] Allow glTF with more then 1 morph mesh and 1 non-morph mesh

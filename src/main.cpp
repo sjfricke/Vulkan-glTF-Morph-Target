@@ -250,10 +250,10 @@ public:
 			exit(-1);
 		}
 #endif
-		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/AnimatedMorphCube/glTF/AnimatedMorphCube.gltf", vulkanDevice, queue);
 //		models.cube.loadFromFile(assetpath + "models/AnimatedMorphSphere/glTF/AnimatedMorphSphere.gltf", vulkanDevice, queue);
-//		models.cube.loadFromFile(assetpath + "models/twoCubeMorph/twoCubeMorph.gltf", vulkanDevice, queue);
-//		models.cube.loadFromFile(assetpath + "models/threeCube/threeCube.gltf", vulkanDevice, queue);
+//		models.cube.loadFromFile(assetpath + "models/fourCube/fourCube.gltf", vulkanDevice, queue);
+		models.cube.loadFromFile(assetpath + "models/twoCube/twoCube.gltf", vulkanDevice, queue);
 
 		// Need to wait until we get morph target data to build storage buffer for it
 		prepareStorageBuffers();
@@ -675,10 +675,14 @@ public:
 									float weightDiff = mesh.weightsData[(mesh.currentIndex + 1) * mesh.weightsInit.size() + i] - mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
 									mesh.morphPushConst.weights[i] = (mixRate * weightDiff) + mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
 								}
-//								std::cout << "weights[0]: " << mesh.morphPushConst.weights[0] << std::endl;
-								break;
+							} else {
+								// fill in with last index
+								for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+									mesh.morphPushConst.weights[i] =
+										mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+								}
 							}
-							// if at end then drop to STEP and set last index weights
+							break;
 						case vkglTF::Mesh::STEP:
 							// sets weight to currentIndex only when step is reached
 							for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
@@ -687,17 +691,39 @@ public:
 							}
 							break;
 						case vkglTF::Mesh::CUBICSPLINE:
-							// TODO correctly implement... putting linear until then
+							// Implemented from https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#appendix-c-spline-interpolation
+							// p(t) = (2t^3 - 3t^2 + 1)p0 + (t^3 - 2t^2 + t)m0 + (-2t^3 + 3t^2)p1 + (t^3 - t^2)m1
+							// Assuming data is packed [in0, in1, ...inN, w0, w1, ...wN, out0, out1, ...outN]
 							if (mesh.currentIndex < mesh.weightsTime.size() - 1) {
+								//t = (tcurrent - tk) / (tk+1 - tk)
+								float tDelta = mesh.weightsTime[mesh.currentIndex + 1] - mesh.weightsTime[mesh.currentIndex];
+								float t = (models.cube.currentTime - mesh.weightsTime[mesh.currentIndex]) / tDelta;
+								assert(t >= 0.0f && t <= 1.0f);
 
-								float mixRate = (models.cube.currentTime - mesh.weightsTime[mesh.currentIndex]) /
-									(mesh.weightsTime[mesh.currentIndex + 1] - mesh.weightsTime[mesh.currentIndex]);
+								float p0Const = (2 * pow(t, 3.0f)) - (3 * pow(t, 2.0f)) + 1.0f;
+								float m0Const = pow(t, 3.0f) - (2 * pow(t, 2.0f)) + t;
+								float p1Const = (-2 * pow(t, 3.0f)) + (3 * pow(t, 2.0f));
+								float m1Const = pow(t, 3.0f) - pow(t, 2.0f);
+
+								// This is assuming from https://github.com/KhronosGroup/glTF/issues/1344
+								int inTangentOffsetK1 = (mesh.currentIndex + 1) * mesh.weightsInit.size() * 3;
+								int vertexOffset = (mesh.currentIndex * mesh.weightsInit.size() * 3) + mesh.weightsInit.size();
+								int vertexOffsetK1 = ((mesh.currentIndex + 1) * mesh.weightsInit.size() * 3) + mesh.weightsInit.size();
+								int outTangentOffset = (mesh.currentIndex * mesh.weightsInit.size() * 3) + (mesh.weightsInit.size() * 2);
 
 								for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
-									float weightDiff = mesh.weightsData[(mesh.currentIndex+1) * mesh.weightsInit.size() * 3 + mesh.weightsInit.size() + i] - mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() * 3 + mesh.weightsInit.size() + i];
-									mesh.morphPushConst.weights[i] = (mixRate * weightDiff) + mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() * 3 + mesh.weightsInit.size() + i];
+									float p0 = p0Const * mesh.weightsData[vertexOffset + i];
+									float m0 = m0Const * (mesh.weightsData[outTangentOffset + i] * tDelta);
+									float p1 = p1Const * mesh.weightsData[vertexOffsetK1 + i];
+									float m1 = m1Const * (mesh.weightsData[inTangentOffsetK1 + i] * tDelta);
+									mesh.morphPushConst.weights[i] = p0 + m0 + p1 + m1; // finally!
 								}
-								break;
+							} else {
+								// fill in with last index
+								for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+									mesh.morphPushConst.weights[i] =
+										mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+								}
 							}
 							break;
 						default: std::cout << "Non supported interpolation" << std::endl;
