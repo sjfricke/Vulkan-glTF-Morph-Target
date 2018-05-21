@@ -789,7 +789,7 @@ namespace vkglTF
 			else {
 				// TODO: throw
 				std::cerr << "Could not load gltf file: " << error << std::endl;
-				return;
+				exit(-1);
 			}
 
 
