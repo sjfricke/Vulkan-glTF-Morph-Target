@@ -25,7 +25,7 @@ out gl_PerVertex
 
 void main()
 {
-    vec3 lightPos = vec3(2.0, -0.5, 2.0);
+    vec3 lightPos = vec3(2.0, -0.5, 7.0);
 
 	gl_Position = ubo.MVP * vec4(inPos, 1.0);
 

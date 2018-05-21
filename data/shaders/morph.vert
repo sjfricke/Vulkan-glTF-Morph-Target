@@ -41,30 +41,31 @@ out gl_PerVertex
 uint pIndex;
 void main()
 {
-    vec3 lightPos = vec3(2.0, -0.5, 2.0);
+    vec3 lightPos = vec3(2.0, -0.5, 7.0);
     vec3 morphPos = inPos;
+    uint vertexOffset = (push.vertexStride * gl_VertexIndex * 3);
 
     for (uint i = 0, pIndex = 0; i < push.normalOffset; i++, pIndex++) {
-        morphPos += vec3(morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 0],
-                         morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 1],
-                         morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 2])
+        morphPos += vec3(morphTargets.buf[(vertexOffset + (i * 3) + 0) + push.bufferOffset],
+                         morphTargets.buf[(vertexOffset + (i * 3) + 1) + push.bufferOffset],
+                         morphTargets.buf[(vertexOffset + (i * 3) + 2) + push.bufferOffset])
                          * push.weights[pIndex];
     }
 
     vec3 morphNormal = inNormal;
     for (uint i = push.normalOffset, pIndex = 0; i < push.tangentOffset; i++, pIndex++) {
-        morphNormal += vec3(morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 0],
-                            morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 1],
-                            morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 2])
+        morphNormal += vec3(morphTargets.buf[(vertexOffset + (i * 3) + 0) + push.bufferOffset],
+                            morphTargets.buf[(vertexOffset + (i * 3) + 1) + push.bufferOffset],
+                            morphTargets.buf[(vertexOffset + (i * 3) + 2) + push.bufferOffset])
                           * push.weights[pIndex];
     }
 
     // unused at the moment
     vec3 morphTagent = inTangent;
     for (uint i = push.tangentOffset, pIndex = 0; i < push.vertexStride; i++, pIndex++) {
-        morphTagent += vec3(morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 0],
-                            morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 1],
-                            morphTargets.buf[(push.vertexStride * gl_VertexIndex * 3) + (i * 3) + 2])
+        morphTagent += vec3(morphTargets.buf[(vertexOffset + (i * 3) + 0) + push.bufferOffset],
+                            morphTargets.buf[(vertexOffset + (i * 3) + 1) + push.bufferOffset],
+                            morphTargets.buf[(vertexOffset + (i * 3) + 2) + push.bufferOffset])
                           * push.weights[pIndex];
     }
 

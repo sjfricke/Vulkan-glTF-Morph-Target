@@ -348,6 +348,7 @@ namespace vkglTF
 		std::vector<float> weightsInit;
 		std::vector<float> weightsTime;
 		std::vector<float> weightsData;
+		uint32_t morphVertexOffset;
 		MorphPushConst morphPushConst;
 
 		std::vector<Primitive> primitives;
@@ -543,6 +544,7 @@ namespace vkglTF
 				Primitive &pPrimitive = pMesh.primitives.back();
 
 				uint32_t vertexStart = (pMesh.isMorphTarget) ? static_cast<uint32_t>(vertexBufferMorph.size()) : static_cast<uint32_t>(vertexBufferNormal.size());
+				pMesh.morphVertexOffset = vertexStart * sizeof(Vertex);
 
 				// Vertices
 				{
@@ -625,6 +627,12 @@ namespace vkglTF
 						}
 					}
 
+					std::cout << "bufferOffset: " << pMesh.morphPushConst.bufferOffset << std::endl;
+					std::cout << "normalOffset: " << pMesh.morphPushConst.normalOffset << std::endl;
+					std::cout << "tangentOffset: " << pMesh.morphPushConst.tangentOffset << std::endl;
+					std::cout << "vertexStride: " << pMesh.morphPushConst.vertexStride << std::endl;
+					std::cout << "--------------" << std::endl;
+
 					for (size_t v = 0; v < posAccessor.count; v++) {
 						Vertex vert{};
 						vert.pos = localNodeTRSMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);
@@ -656,13 +664,14 @@ namespace vkglTF
 
 					pPrimitive.indexCount = static_cast<uint32_t>(accessor.count);
 
+					// each morph has own gl_VertexIndex start at 0 so index is at zero_
 					switch (accessor.componentType) {
 					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
 						uint32_t *buf = new uint32_t[accessor.count];
 						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint32_t));
 						for (size_t index = 0; index < accessor.count; index++) {
 							if (pMesh.isMorphTarget) {
-								indexBufferMorph.push_back(buf[index] + vertexStart);
+								indexBufferMorph.push_back(buf[index]);
 							} else {
 								indexBufferNormal.push_back(buf[index] + vertexStart);
 							}
@@ -674,7 +683,7 @@ namespace vkglTF
 						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint16_t));
 						for (size_t index = 0; index < accessor.count; index++) {
 							if (pMesh.isMorphTarget) {
-								indexBufferMorph.push_back(buf[index] + vertexStart);
+								indexBufferMorph.push_back(buf[index]);
 							} else {
 								indexBufferNormal.push_back(buf[index] + vertexStart);
 							}
@@ -686,7 +695,7 @@ namespace vkglTF
 						memcpy(buf, &buffer.data[accessor.byteOffset + bufferView.byteOffset], accessor.count * sizeof(uint8_t));
 						for (size_t index = 0; index < accessor.count; index++) {
 							if (pMesh.isMorphTarget) {
-								indexBufferMorph.push_back(buf[index] + vertexStart);
+								indexBufferMorph.push_back(buf[index]);
 							} else {
 								indexBufferNormal.push_back(buf[index] + vertexStart);
 							}
@@ -791,7 +800,6 @@ namespace vkglTF
 				std::cerr << "Could not load gltf file: " << error << std::endl;
 				exit(-1);
 			}
-
 
 			size_t vertexBufferSizeMorph = vertexBufferMorph.size() * sizeof(Vertex);
 			size_t indexBufferSizeMorph = indexBufferMorph.size() * sizeof(uint32_t);
@@ -925,7 +933,8 @@ namespace vkglTF
 		{
 			// TODO have a static and full draw call
 			for (auto mesh : meshesMorph) {
-				const VkDeviceSize offsets[1] = {0};
+				// need offset since index buffer will be zero'ed for each mesh
+				const VkDeviceSize offsets[1] = {mesh.morphVertexOffset};
 				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(vkglTF::Mesh::morphPushConst), &mesh.morphPushConst);
 				vkCmdBindVertexBuffers(commandBuffer, 0, 1, &verticesMorph.buffer, offsets);
 				vkCmdBindIndexBuffer(commandBuffer, indicesMorph.buffer, 0, VK_INDEX_TYPE_UINT32);
