@@ -12,6 +12,7 @@ layout (binding = 0) uniform UBO
 	mat4 MVP;
 	mat4 model;
 	vec4 camera;
+	vec4 lightPos;
 } ubo;
 
 // Tried having the morphTargets.buf a vec3[], but there must be some inheirent padding issues not aware of
@@ -41,7 +42,6 @@ out gl_PerVertex
 uint pIndex;
 void main()
 {
-    vec3 lightPos = vec3(2.0, -0.5, 7.0);
     vec3 morphPos = inPos;
     uint vertexOffset = (push.vertexStride * gl_VertexIndex * 3);
 
@@ -73,7 +73,7 @@ void main()
 
     vec4 pos = ubo.model * vec4(inPos, 1.0);
     outNormal = mat3(inverse(transpose(ubo.model))) * morphNormal;
-    vec3 lPos = mat3(ubo.model) * lightPos;
+    vec3 lPos = mat3(ubo.model) * ubo.lightPos.xyz;
     outLightVec = lPos - pos.xyz;
     outViewVec = ubo.camera.xyz - pos.xyz;
 }

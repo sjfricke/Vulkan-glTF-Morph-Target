@@ -627,12 +627,6 @@ namespace vkglTF
 						}
 					}
 
-					std::cout << "bufferOffset: " << pMesh.morphPushConst.bufferOffset << std::endl;
-					std::cout << "normalOffset: " << pMesh.morphPushConst.normalOffset << std::endl;
-					std::cout << "tangentOffset: " << pMesh.morphPushConst.tangentOffset << std::endl;
-					std::cout << "vertexStride: " << pMesh.morphPushConst.vertexStride << std::endl;
-					std::cout << "--------------" << std::endl;
-
 					for (size_t v = 0; v < posAccessor.count; v++) {
 						Vertex vert{};
 						vert.pos = localNodeTRSMatrix * glm::vec4(glm::make_vec3(&bufferPos[v * 3]), 1.0f);

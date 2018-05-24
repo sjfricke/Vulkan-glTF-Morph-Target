@@ -12,6 +12,7 @@ layout (binding = 0) uniform UBO
 	mat4 MVP;
 	mat4 model;
 	vec4 camera;
+	vec4 lightPos;
 } ubo;
 
 layout (location = 0) out vec3 outNormal;
@@ -25,13 +26,11 @@ out gl_PerVertex
 
 void main()
 {
-    vec3 lightPos = vec3(2.0, -0.5, 7.0);
-
 	gl_Position = ubo.MVP * vec4(inPos, 1.0);
 
     vec4 pos = ubo.model * vec4(inPos, 1.0);
     outNormal = mat3(inverse(transpose(ubo.model))) * inNormal;
-    vec3 lPos = mat3(ubo.model) * lightPos;
+    vec3 lPos = mat3(ubo.model) * ubo.lightPos.xyz;
     outLightVec = lPos - pos.xyz;
     outViewVec = ubo.camera.xyz - pos.xyz;
 }

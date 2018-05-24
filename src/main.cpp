@@ -112,6 +112,7 @@ public:
 		glm::mat4 MVP;
 		glm::mat4 model;
 		glm::vec4 camera;
+		glm::vec4 lightPos;
 	} uboMatrices;
 
 	struct PipelineLayouts {
@@ -486,6 +487,9 @@ public:
 	*/
 	void prepareUniformBuffers()
 	{
+		// Set light position, not currently updating value
+		uboMatrices.lightPos = glm::vec4(2.0, -0.5, 7.0, 1.0);
+
 		// Cube vertex shader uniform buffer
 		VK_CHECK_RESULT(vulkanDevice->createBuffer(
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
