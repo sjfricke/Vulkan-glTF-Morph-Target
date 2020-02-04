@@ -490,34 +490,38 @@ namespace vkglTF
 					if (foundSampler) { break; }
 				}
 
-				// set init weights of mesh
-				for (size_t i = 0; i < mesh.weights.size() && i < MAX_WEIGHTS; i++) {
-					pMesh.weightsInit.push_back(static_cast<float>(mesh.weights[i]));
-				}
+				if (!foundSampler) {
+					// No animation assigned to the mesh morph.
+				} else {
+					// set init weights of mesh
+					for (size_t i = 0; i < mesh.weights.size() && i < MAX_WEIGHTS; i++) {
+						pMesh.weightsInit.push_back(static_cast<float>(mesh.weights[i]));
+					}
 
-				// get weight input (times)
-				const tinygltf::Accessor &inputAccessor = model.accessors[pMesh.input];
-				const tinygltf::BufferView &inputView = model.bufferViews[inputAccessor.bufferView];
-				const float* weightTimeBuffer = reinterpret_cast<const float *>(&(model.buffers[inputView.buffer].data[inputAccessor.byteOffset + inputView.byteOffset]));
-				pMesh.weightsTime.resize(inputAccessor.count);
+					// get weight input (times)
+					const tinygltf::Accessor &inputAccessor = model.accessors[pMesh.input];
+					const tinygltf::BufferView &inputView = model.bufferViews[inputAccessor.bufferView];
+					const float* weightTimeBuffer = reinterpret_cast<const float *>(&(model.buffers[inputView.buffer].data[inputAccessor.byteOffset + inputView.byteOffset]));
+					pMesh.weightsTime.resize(inputAccessor.count);
 
-				// We need to copy morph weight data for CPU to calculate during looping
-				// Also trying to avoid C memcpy for safty and true C++ container use
-				for (size_t i = 0; i < pMesh.weightsTime.size(); i++) {
-					pMesh.weightsTime[i] = weightTimeBuffer[i];
-				}
+					// We need to copy morph weight data for CPU to calculate during looping
+					// Also trying to avoid C memcpy for safty and true C++ container use
+					for (size_t i = 0; i < pMesh.weightsTime.size(); i++) {
+						pMesh.weightsTime[i] = weightTimeBuffer[i];
+					}
 
-				// looking for animation time in whole model
-				animationMaxTime = std::max(animationMaxTime, pMesh.weightsTime.back());
+					// looking for animation time in whole model
+					animationMaxTime = std::max(animationMaxTime, pMesh.weightsTime.back());
 
-				// now the output (weight data)
-				const tinygltf::Accessor &outputAccessor = model.accessors[pMesh.output];
-				const tinygltf::BufferView &outputView = model.bufferViews[outputAccessor.bufferView];
-				const float* weightDataBuffer = reinterpret_cast<const float *>(&(model.buffers[outputView.buffer].data[outputAccessor.byteOffset + outputView.byteOffset]));
-				pMesh.weightsData.resize(outputAccessor.count);
+					// now the output (weight data)
+					const tinygltf::Accessor &outputAccessor = model.accessors[pMesh.output];
+					const tinygltf::BufferView &outputView = model.bufferViews[outputAccessor.bufferView];
+					const float* weightDataBuffer = reinterpret_cast<const float *>(&(model.buffers[outputView.buffer].data[outputAccessor.byteOffset + outputView.byteOffset]));
+					pMesh.weightsData.resize(outputAccessor.count);
 
-				for (size_t i = 0; i < pMesh.weightsData.size(); i++) {
-					pMesh.weightsData[i] = weightDataBuffer[i];
+					for (size_t i = 0; i < pMesh.weightsData.size(); i++) {
+						pMesh.weightsData[i] = weightDataBuffer[i];
+					}
 				}
 
 			} else {
