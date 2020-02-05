@@ -641,96 +641,106 @@ public:
 
 			for (auto& mesh: models.cube.meshesMorph) {
 
-				// check to reset loop
-				if (models.cube.currentTime > models.cube.animationMaxTime) {
-					mesh.currentIndex = 0;
-					reset = true;
-
-					// reset all weight data
+				if (mesh.weightsTime.empty() || mesh.weightsData.empty()) {
+					// No animation for morph target weights.
+					// Use initial weights in .glTF
 					for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
 						mesh.morphPushConst.weights[i] = mesh.weightsInit[i];
 					}
 
 				} else {
 
-					// check where currentIndex is at
-					while (true) {
-						if (mesh.currentIndex == mesh.weightsTime.size() - 1) {
-							break; // at end
+					// check to reset loop
+					if (models.cube.currentTime > models.cube.animationMaxTime) {
+						mesh.currentIndex = 0;
+						reset = true;
+
+						// reset all weight data
+						for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+							mesh.morphPushConst.weights[i] = mesh.weightsInit[i];
 						}
 
-						if (models.cube.currentTime > mesh.weightsTime[mesh.currentIndex + 1]) {
-							mesh.currentIndex++;
-						} else {
-							break;
-						}
-					}
+					} else {
 
-					// TODO all glTF sampler inputs are linear, don't need to compute for non-linear methods
-					switch (mesh.interpolation) {
-						// TODO clean up LINEAR math style to be readable
-						case vkglTF::Mesh::LINEAR:
-							if (mesh.currentIndex < mesh.weightsTime.size() - 1) {
+						// check where currentIndex is at
+						while (true) {
+							if (mesh.currentIndex == mesh.weightsTime.size() - 1) {
+								break; // at end
+							}
 
-								float mixRate = (models.cube.currentTime - mesh.weightsTime[mesh.currentIndex]) /
-									(mesh.weightsTime[mesh.currentIndex + 1] - mesh.weightsTime[mesh.currentIndex]);
-
-								for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
-									float weightDiff = mesh.weightsData[(mesh.currentIndex + 1) * mesh.weightsInit.size() + i] - mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
-									mesh.morphPushConst.weights[i] = (mixRate * weightDiff) + mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
-								}
+							if (models.cube.currentTime > mesh.weightsTime[mesh.currentIndex + 1]) {
+								mesh.currentIndex++;
 							} else {
-								// fill in with last index
+								break;
+							}
+						}
+
+						// TODO all glTF sampler inputs are linear, don't need to compute for non-linear methods
+						switch (mesh.interpolation) {
+							// TODO clean up LINEAR math style to be readable
+							case vkglTF::Mesh::LINEAR:
+								if (mesh.currentIndex < mesh.weightsTime.size() - 1) {
+
+									float mixRate = (models.cube.currentTime - mesh.weightsTime[mesh.currentIndex]) /
+										(mesh.weightsTime[mesh.currentIndex + 1] - mesh.weightsTime[mesh.currentIndex]);
+
+									for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+										float weightDiff = mesh.weightsData[(mesh.currentIndex + 1) * mesh.weightsInit.size() + i] - mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+										mesh.morphPushConst.weights[i] = (mixRate * weightDiff) + mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+									}
+								} else {
+									// fill in with last index
+									for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+										mesh.morphPushConst.weights[i] =
+											mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+									}
+								}
+								break;
+							case vkglTF::Mesh::STEP:
+								// sets weight to currentIndex only when step is reached
 								for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
 									mesh.morphPushConst.weights[i] =
 										mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
 								}
-							}
-							break;
-						case vkglTF::Mesh::STEP:
-							// sets weight to currentIndex only when step is reached
-							for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
-								mesh.morphPushConst.weights[i] =
-									mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
-							}
-							break;
-						case vkglTF::Mesh::CUBICSPLINE:
-							// Implemented from https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#appendix-c-spline-interpolation
-							// p(t) = (2t^3 - 3t^2 + 1)p0 + (t^3 - 2t^2 + t)m0 + (-2t^3 + 3t^2)p1 + (t^3 - t^2)m1
-							// Assuming data is packed [in0, in1, ...inN, w0, w1, ...wN, out0, out1, ...outN]
-							if (mesh.currentIndex < mesh.weightsTime.size() - 1) {
-								//t = (tcurrent - tk) / (tk+1 - tk)
-								float tDelta = mesh.weightsTime[mesh.currentIndex + 1] - mesh.weightsTime[mesh.currentIndex];
-								float t = (models.cube.currentTime - mesh.weightsTime[mesh.currentIndex]) / tDelta;
-								assert(t >= 0.0f && t <= 1.0f);
+								break;
+							case vkglTF::Mesh::CUBICSPLINE:
+								// Implemented from https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#appendix-c-spline-interpolation
+								// p(t) = (2t^3 - 3t^2 + 1)p0 + (t^3 - 2t^2 + t)m0 + (-2t^3 + 3t^2)p1 + (t^3 - t^2)m1
+								// Assuming data is packed [in0, in1, ...inN, w0, w1, ...wN, out0, out1, ...outN]
+								if (mesh.currentIndex < mesh.weightsTime.size() - 1) {
+									//t = (tcurrent - tk) / (tk+1 - tk)
+									float tDelta = mesh.weightsTime[mesh.currentIndex + 1] - mesh.weightsTime[mesh.currentIndex];
+									float t = (models.cube.currentTime - mesh.weightsTime[mesh.currentIndex]) / tDelta;
+									assert(t >= 0.0f && t <= 1.0f);
 
-								float p0Const = (2 * pow(t, 3.0f)) - (3 * pow(t, 2.0f)) + 1.0f;
-								float m0Const = pow(t, 3.0f) - (2 * pow(t, 2.0f)) + t;
-								float p1Const = (-2 * pow(t, 3.0f)) + (3 * pow(t, 2.0f));
-								float m1Const = pow(t, 3.0f) - pow(t, 2.0f);
+									float p0Const = (2 * pow(t, 3.0f)) - (3 * pow(t, 2.0f)) + 1.0f;
+									float m0Const = pow(t, 3.0f) - (2 * pow(t, 2.0f)) + t;
+									float p1Const = (-2 * pow(t, 3.0f)) + (3 * pow(t, 2.0f));
+									float m1Const = pow(t, 3.0f) - pow(t, 2.0f);
 
-								// This is assuming from https://github.com/KhronosGroup/glTF/issues/1344
-								int inTangentOffsetK1 = (mesh.currentIndex + 1) * mesh.weightsInit.size() * 3;
-								int vertexOffset = (mesh.currentIndex * mesh.weightsInit.size() * 3) + mesh.weightsInit.size();
-								int vertexOffsetK1 = ((mesh.currentIndex + 1) * mesh.weightsInit.size() * 3) + mesh.weightsInit.size();
-								int outTangentOffset = (mesh.currentIndex * mesh.weightsInit.size() * 3) + (mesh.weightsInit.size() * 2);
+									// This is assuming from https://github.com/KhronosGroup/glTF/issues/1344
+									int inTangentOffsetK1 = (mesh.currentIndex + 1) * mesh.weightsInit.size() * 3;
+									int vertexOffset = (mesh.currentIndex * mesh.weightsInit.size() * 3) + mesh.weightsInit.size();
+									int vertexOffsetK1 = ((mesh.currentIndex + 1) * mesh.weightsInit.size() * 3) + mesh.weightsInit.size();
+									int outTangentOffset = (mesh.currentIndex * mesh.weightsInit.size() * 3) + (mesh.weightsInit.size() * 2);
 
-								for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
-									float p0 = p0Const * mesh.weightsData[vertexOffset + i];
-									float m0 = m0Const * (mesh.weightsData[outTangentOffset + i] * tDelta);
-									float p1 = p1Const * mesh.weightsData[vertexOffsetK1 + i];
-									float m1 = m1Const * (mesh.weightsData[inTangentOffsetK1 + i] * tDelta);
-									mesh.morphPushConst.weights[i] = p0 + m0 + p1 + m1; // finally!
+									for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+										float p0 = p0Const * mesh.weightsData[vertexOffset + i];
+										float m0 = m0Const * (mesh.weightsData[outTangentOffset + i] * tDelta);
+										float p1 = p1Const * mesh.weightsData[vertexOffsetK1 + i];
+										float m1 = m1Const * (mesh.weightsData[inTangentOffsetK1 + i] * tDelta);
+										mesh.morphPushConst.weights[i] = p0 + m0 + p1 + m1; // finally!
+									}
+								} else {
+									// fill in with last index
+									for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
+										mesh.morphPushConst.weights[i] =
+											mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
+									}
 								}
-							} else {
-								// fill in with last index
-								for (size_t i = 0; i < mesh.weightsInit.size(); i++) {
-									mesh.morphPushConst.weights[i] =
-										mesh.weightsData[mesh.currentIndex * mesh.weightsInit.size() + i];
-								}
-							}
-							break;
-						default: std::cout << "Non supported interpolation" << std::endl;
+								break;
+							default: std::cout << "Non supported interpolation" << std::endl;
+						}
 					}
 				}
 			} // for(mesh)
