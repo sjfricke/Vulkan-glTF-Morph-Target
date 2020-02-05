@@ -505,7 +505,8 @@ namespace vkglTF
 
 				if (!foundSampler) {
 					// No animation assigned to the mesh morph target weights.
-          // Just for safety
+
+					// Just for safety
 					pMesh.weightsTime.clear();
 					pMesh.weightsData.clear();
 				} else {
