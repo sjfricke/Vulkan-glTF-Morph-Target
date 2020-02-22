@@ -369,13 +369,13 @@ namespace vkglTF
 		};
 
 		struct Vertices {
-			VkBuffer buffer;
+			VkBuffer buffer{VK_NULL_HANDLE};
 			VkDeviceMemory memory;
 		};
 
 		struct Indices {
 			uint32_t count;
-			VkBuffer buffer;
+			VkBuffer buffer{VK_NULL_HANDLE};
 			VkDeviceMemory memory;
 		};
 
@@ -396,14 +396,22 @@ namespace vkglTF
 
 		void destroy(VkDevice device)
 		{
-			vkDestroyBuffer(device, verticesMorph.buffer, nullptr);
-			vkFreeMemory(device, verticesMorph.memory, nullptr);
-			vkDestroyBuffer(device, indicesMorph.buffer, nullptr);
-			vkFreeMemory(device, indicesMorph.memory, nullptr);
-			vkDestroyBuffer(device, verticesNormal.buffer, nullptr);
-			vkFreeMemory(device, verticesNormal.memory, nullptr);
-			vkDestroyBuffer(device, indicesNormal.buffer, nullptr);
-			vkFreeMemory(device, indicesNormal.memory, nullptr);
+			if (verticesMorph.buffer != VK_NULL_HANDLE) {
+				vkDestroyBuffer(device, verticesMorph.buffer, nullptr);
+				vkFreeMemory(device, verticesMorph.memory, nullptr);
+			}
+			if (indicesMorph.buffer != VK_NULL_HANDLE) {
+				vkDestroyBuffer(device, indicesMorph.buffer, nullptr);
+				vkFreeMemory(device, indicesMorph.memory, nullptr);
+			}
+			if (verticesNormal.buffer != VK_NULL_HANDLE) {
+				vkDestroyBuffer(device, verticesNormal.buffer, nullptr);
+				vkFreeMemory(device, verticesNormal.memory, nullptr);
+			}
+			if (indicesNormal.buffer != VK_NULL_HANDLE) {
+				vkDestroyBuffer(device, indicesNormal.buffer, nullptr);
+				vkFreeMemory(device, indicesNormal.memory, nullptr);
+			}
 			for (auto texture : textures) {
 				texture.destroy();
 			}
@@ -490,13 +498,18 @@ namespace vkglTF
 					if (foundSampler) { break; }
 				}
 
+				// set init weights of mesh
+				for (size_t i = 0; i < mesh.weights.size() && i < MAX_WEIGHTS; i++) {
+					pMesh.weightsInit.push_back(static_cast<float>(mesh.weights[i]));
+				}
+
 				if (!foundSampler) {
-					// No animation assigned to the mesh morph.
+					// No animation assigned to the mesh morph target weights.
+
+					// Just for safety
+					pMesh.weightsTime.clear();
+					pMesh.weightsData.clear();
 				} else {
-					// set init weights of mesh
-					for (size_t i = 0; i < mesh.weights.size() && i < MAX_WEIGHTS; i++) {
-						pMesh.weightsInit.push_back(static_cast<float>(mesh.weights[i]));
-					}
 
 					// get weight input (times)
 					const tinygltf::Accessor &inputAccessor = model.accessors[pMesh.input];
